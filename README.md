@@ -1,5 +1,7 @@
 # AR Fast SNTP
 
+> **Continuation checkpoint (2026-10-10):** Read [HANDOFF.md](HANDOFF.md) before editing. It contains the verified v0.10.1/CI #31 baseline, unresolved ARSAS RAW/Npcap UDP receive problem, GUI acceptance criteria, source map and next-thread plan. Keep PR #1 Draft until isolated Windows field testing passes.
+
 **Windows x64 · GPL-2.0-or-later · Avalonia Studio**
 
 AR Fast SNTP is a Windows NTP client and monitor for **authorized isolated
