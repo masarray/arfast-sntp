@@ -19,6 +19,9 @@ internal sealed record DashboardStatus
     public long AcceptedCount { get; init; }
     public long RejectedCount { get; init; }
     public bool StepEnabled { get; init; }
+    public byte? Stratum { get; init; }
+    public DateTimeOffset? LastCorrectionUtc { get; init; }
+    public string Broadcast { get; init; } = "Not measured";
     public string[]? RecentCorrections { get; init; }
 
     internal static bool TryParse(string json, out DashboardStatus? status, out string reason)

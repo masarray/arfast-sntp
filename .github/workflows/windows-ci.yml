@@ -25,6 +25,7 @@ jobs:
           dotnet build tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --warnaserror
           dotnet build src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release --warnaserror
           dotnet build src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --warnaserror
+          dotnet build src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release --warnaserror
       - name: SNTP regression and offline setup argument tests
         shell: pwsh
         run: |
@@ -65,12 +66,14 @@ jobs:
           dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/worker
           dotnet publish src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/dashboard
           dotnet publish src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o setup-build
+          dotnet publish src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/studio
       - name: Assemble GUI setup bundle without PowerShell dependency
         shell: pwsh
         run: |
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
           Copy-Item tools/install-sync.cmd,tools/install-monitor.cmd,tools/install-certification-lab.cmd,tools/uninstall.cmd publish/
-          Copy-Item docs/LAB-ACCEPTANCE.md,docs/START-HERE.txt publish/
+          Copy-Item docs/LAB-ACCEPTANCE.md,docs/START-HERE.txt,docs/DESIGN-TOKEN-PROVENANCE.md publish/
+          Copy-Item third_party/ARSSYUT-GPL-2.0-OR-LATER.txt publish/
           foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/uninstall.cmd')) {
             if (-not (Select-String -LiteralPath $file -Pattern 'ARFastSNTP.Setup.exe' -SimpleMatch)) {
               throw "Direct launcher missing graphical installer: $file"
@@ -92,6 +95,14 @@ jobs:
           $monitorLauncher = Get-Content -LiteralPath 'publish/install-monitor.cmd' -Raw
           if (-not $monitorLauncher.Contains('--monitor-only')) {
             throw 'Diagnostic monitor wrapper must not silently enable clock stepping'
+          }
+          if (-not (Test-Path 'publish/studio/ARFastSNTP.Studio.exe')) {
+            throw 'Avalonia Studio Windows executable missing from artifact'
+          }
+          foreach ($name in @('ArColors.axaml', 'ArTokens.axaml', 'ArTypography.axaml')) {
+            if (-not (Test-Path (Join-Path 'src/ARFastSNTP.Studio/Design' $name))) {
+              throw "Pinned Arssyut design token resource missing: $name"
+            }
           }
           $setupExe = Join-Path $PWD 'publish/ARFastSNTP.Setup.exe'
           $verify = Start-Process -FilePath $setupExe -ArgumentList '--verify-package' -PassThru -Wait

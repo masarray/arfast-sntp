@@ -1,5 +1,24 @@
 # AR Fast SNTP — Install, Sync, Monitor
 
+## Windows-only Avalonia Studio preview
+
+The new `src/ARFastSNTP.Studio` is a Windows Avalonia shell using pinned
+design tokens from `masarray/arssyut`. The latest successful Windows artifact
+contains `studio/ARFastSNTP.Studio.exe` alongside the existing worker and
+WinForms fallback. Open Studio to inspect **real service status**: two UTC
+clocks with dates, validated SNTP health, offset/RTT, request counts and
+recent correction events. Use INSTALL & SYNC to invoke the existing C# setup.
+
+This is **not yet** the final Inno installer or a functional multi-server
+manager. The current engine has one server: Studio deliberately disables
+Add Server until the canonical multi-peer worker lands. No fake live rows or
+nonfunctional enable toggles are presented.
+
+Design provenance and licensing: [DESIGN-TOKEN-PROVENANCE.md](docs/DESIGN-TOKEN-PROVENANCE.md).
+Windows-only migration sequence: [WINDOWS-PRODUCT-PLAN.md](docs/WINDOWS-PRODUCT-PLAN.md).
+
+
+
 Native .NET 8 Windows Service + lightweight WinForms live monitor.
 
 **Primary flow: INSTALL & SYNC → Windows Service RUNNING → dashboard monitors.**
