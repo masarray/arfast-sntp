@@ -73,7 +73,12 @@ static async Task<(TimeSpan offset, double rtt)> QueryAsync(IPAddress ip, Cancel
     await socket.SendAsync(request, timeout.Token);
     var response = await socket.ReceiveAsync(timeout.Token);
     clock.Stop();
+    var actualReceiveTime = DateTimeOffset.UtcNow;
     var t4 = t1 + clock.Elapsed;
+    // A Windows clock step during the UDP exchange invalidates this sample.
+    // Monotonic elapsed time must agree with wall-clock elapsed time.
+    if (ClockDiscontinuity.Detected(t1, actualReceiveTime, clock.Elapsed))
+        throw new InvalidOperationException("Windows clock changed during NTP exchange");
     var bytes = response.Buffer;
     if (bytes.Length < 48 || !response.RemoteEndPoint.Address.Equals(ip))
         throw new InvalidOperationException("Invalid NTP source");
@@ -87,9 +92,9 @@ static async Task<(TimeSpan offset, double rtt)> QueryAsync(IPAddress ip, Cancel
     var t3 = ReadTimestamp(bytes.AsSpan(40,8),t1);
     if (t3 < t2) throw new InvalidOperationException("Invalid transmit time");
     var delay = (t4 - t1) - (t3 - t2);
-    if (delay > TimeSpan.FromMilliseconds(250))
+    if (delay < TimeSpan.Zero || delay > TimeSpan.FromMilliseconds(250))
         throw new InvalidOperationException("Excessive network delay");
-    return (TimeSpan.FromTicks(((t2-t1).Ticks + (t3-t4).Ticks)/2),Math.Max(0,delay.TotalMilliseconds));
+    return (TimeSpan.FromTicks(((t2-t1).Ticks + (t3-t4).Ticks)/2),delay.TotalMilliseconds);
 }
 
 static void WriteTimestamp(Span<byte> bytes, DateTimeOffset instant)
@@ -103,10 +108,9 @@ static DateTimeOffset ReadTimestamp(ReadOnlySpan<byte> bytes, DateTimeOffset anc
     var sec = BinaryPrimitives.ReadUInt32BigEndian(bytes[..4]);
     var frac = BinaryPrimitives.ReadUInt32BigEndian(bytes[4..]);
     if (sec == 0 && frac == 0) throw new InvalidOperationException("Zero timestamp");
-    var epoch = new DateTimeOffset(1900,1,1,0,0,0,TimeSpan.Zero);
-    var approximate = (long)(anchor-epoch).TotalSeconds;
-    var era = (long)Math.Round((approximate-sec)/4294967296d);
-    return epoch.AddSeconds(era*4294967296L+sec).AddTicks((long)(((ulong)frac*TimeSpan.TicksPerSecond)>>32));
+    // A validated NTP era reference is required before the decoder can be
+    // trusted across an arbitrary multi-decade local clock jump.
+    return ARFastSNTP.NtpEra.Resolve(sec, frac, anchor);
 }
 
 static bool SetUtc(DateTimeOffset target)

@@ -36,5 +36,9 @@ RoundTrip("fractional milliseconds",
     new DateTimeOffset(2026, 10, 9, 12, 30, 0, TimeSpan.Zero));
 Check("zero fraction at rollover", NtpEra.Resolve(0, 0,
     new DateTimeOffset(2036, 2, 8, 0, 0, 0, TimeSpan.Zero)).Year == 2036);
+Check("clock step during request rejected", ClockDiscontinuity.Detected(
+    DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), TimeSpan.FromMilliseconds(15)));
+Check("normal packet delay accepted", !ClockDiscontinuity.Detected(
+    DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMilliseconds(21), TimeSpan.FromMilliseconds(20)));
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
