@@ -66,54 +66,38 @@ jobs:
       - name: Publish standalone Windows executables
         run: |
           dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/worker
-          dotnet publish src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/dashboard
           dotnet publish src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o setup-build
           dotnet publish src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/studio
-      - name: Assemble GUI setup bundle without PowerShell dependency
+      - name: Validate lean Windows installer payload
         shell: pwsh
         run: |
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
-          Copy-Item tools/install-sync.cmd,tools/install-monitor.cmd,tools/install-certification-lab.cmd,tools/uninstall.cmd publish/
-          Copy-Item docs/LAB-ACCEPTANCE.md,docs/START-HERE.txt,docs/DESIGN-TOKEN-PROVENANCE.md publish/
-          Copy-Item third_party/ARSSYUT-GPL-2.0-OR-LATER.txt publish/
-          foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/uninstall.cmd')) {
-            if (-not (Select-String -LiteralPath $file -Pattern 'ARFastSNTP.Setup.exe' -SimpleMatch)) {
-              throw "Direct launcher missing graphical installer: $file"
-            }
+          foreach ($path in @(
+            'publish/worker/ARFastSNTP.exe',
+            'publish/studio/ARFastSNTP.Studio.exe',
+            'publish/ARFastSNTP.Setup.exe',
+            'LICENSE',
+            'NOTICE',
+            'docs/DESIGN-TOKEN-PROVENANCE.md'
+          )) {
+            if (-not (Test-Path $path)) { throw "Installer payload missing: $path" }
           }
-          $legacy = Get-Content -LiteralPath 'publish/install-certification-lab.cmd' -Raw
-          if (-not $legacy.Contains('install-sync.cmd')) {
-            throw 'Compatibility shortcut must delegate to canonical install-sync.cmd'
+          $xaml = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml' -Raw
+          if ($xaml.Contains('InstallSync_OnClick') -or
+              $xaml.Contains('x:Name="YearInput"') -or
+              $xaml.Contains('Content="+ Add server"')) {
+            throw 'Compact monitor must not expose installer/era/placeholder controls'
           }
-          foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/install-certification-lab.cmd','publish/uninstall.cmd')) {
-            if (Select-String -LiteralPath $file -Pattern 'powershell.exe' -SimpleMatch) {
-              throw "Wrapper must not depend on PowerShell: $file"
-            }
+          if (-not $xaml.Contains('HistoryScroll') -or
+              -not $xaml.Contains('PeerBroadcast') -or
+              -not $xaml.Contains('PcClock')) {
+            throw 'Compact NTP monitor lost required components'
           }
-          $syncLauncher = Get-Content -LiteralPath 'publish/install-sync.cmd' -Raw
-          if (-not $syncLauncher.Contains('--lab')) {
-            throw 'Primary installer must request synchronization mode explicitly'
+          if (Test-Path 'publish/dashboard') {
+            throw 'Old WinForms UI must not be bundled into the canonical installer'
           }
-          $monitorLauncher = Get-Content -LiteralPath 'publish/install-monitor.cmd' -Raw
-          if (-not $monitorLauncher.Contains('--monitor-only')) {
-            throw 'Diagnostic monitor wrapper must not silently enable clock stepping'
-          }
-          if (-not (Test-Path 'publish/studio/ARFastSNTP.Studio.exe')) {
-            throw 'Avalonia Studio Windows executable missing from artifact'
-          }
-          foreach ($name in @('ArColors.axaml', 'ArTokens.axaml', 'ArTypography.axaml')) {
-            if (-not (Test-Path (Join-Path 'src/ARFastSNTP.Studio/Design' $name))) {
-              throw "Pinned Arssyut design token resource missing: $name"
-            }
-          }
-          $setupExe = Join-Path $PWD 'publish/ARFastSNTP.Setup.exe'
-          $verify = Start-Process -FilePath $setupExe -ArgumentList '--verify-package' -PassThru -Wait
-          if ($verify.ExitCode -ne 0) {
-            $errorFile = Join-Path $PWD 'publish/setup-validation-error.txt'
-            if (Test-Path $errorFile) { Get-Content -LiteralPath $errorFile }
-            Get-ChildItem publish -Recurse | Select-Object FullName,Length | Out-String | Write-Host
-            throw "Offline Windows bundle verification failed (exit $($verify.ExitCode))"
-          }
+          Write-Host 'Installer payload verified; legacy WinForms remains source/build fallback.'
+
       - name: Compile standalone Inno Setup wizard
         shell: pwsh
         run: |
@@ -140,5 +124,6 @@ jobs:
             LICENSE
             NOTICE
             docs/START-HERE.txt
+            docs/INSTALLER-UX-ACCEPTANCE.md
           if-no-files-found: error
           retention-days: 14

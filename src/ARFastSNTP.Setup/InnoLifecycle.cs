@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using System.Diagnostics;
 using System.Text;
 
@@ -15,6 +16,7 @@ internal static class InnoLifecycle
         InstallerOperations.ServiceName, "installer-recovery");
     private static readonly string PreviousImageFile = Path.Combine(RecoveryDirectory, "previous-image.txt");
     private static readonly string PreviousWorkerFile = Path.Combine(RecoveryDirectory, "previous-worker.exe");
+    private static readonly string PreviousStateFile = Path.Combine(RecoveryDirectory, "previous-state.txt");
     private const string NewMarker = "!NO_PREVIOUS_SERVICE!";
 
     private static void RequireAdministrator()
@@ -45,10 +47,21 @@ internal static class InnoLifecycle
                 "installation before trying again: " + RecoveryDirectory);
 
         bool recorded = false;
+        bool wasRunning = oldImage is not null && InstallerOperations.IsServiceRunning();
+        int previousStart = 2;
+        if (oldImage is not null)
+        {
+            using var serviceKey = Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Services\" + InstallerOperations.ServiceName);
+            previousStart = Convert.ToInt32(serviceKey?.GetValue("Start", 2));
+            if (previousStart is < 2 or > 4)
+                throw new InvalidOperationException("Unexpected old Windows Service start mode.");
+        }
         try
         {
-            string? worker = oldImage is not null && File.Exists(InstallerOperations.InstalledWorker)
-                ? InstallerOperations.InstalledWorker : null;
+            string? priorExecutable = ServiceImageIdentity.ExtractExecutable(oldImage);
+            string? worker = priorExecutable is not null && File.Exists(priorExecutable)
+                ? priorExecutable : null;
             if (oldImage is not null && worker is null)
                 throw new FileNotFoundException(
                     "Registered ARFastSNTP service has no owned executable. Repair manually before upgrade.");
@@ -59,13 +72,20 @@ internal static class InnoLifecycle
                 File.Copy(worker, PreviousWorkerFile, overwrite: true);
             }
 
-            // A partial snapshot must never be accepted as a successful prepare.
+            // Save original SCM start type and whether it was running. A
+            // failed upgrade must not silently turn a disabled/stopped service on.
+            string stateTemp = PreviousStateFile + ".new";
+            File.WriteAllText(stateTemp, $"{(wasRunning ? 1 : 0)}|{previousStart}",
+                new UTF8Encoding(false));
+            File.Move(stateTemp, PreviousStateFile, overwrite: true);
+
+            // Commit the prepare manifest LAST; Abort ignores incomplete stages.
             string temp = PreviousImageFile + ".new";
             File.WriteAllText(temp, oldImage ?? NewMarker, new UTF8Encoding(false));
             File.Move(temp, PreviousImageFile, overwrite: true);
             recorded = true;
 
-            if (oldImage is not null && InstallerOperations.IsServiceRunning())
+            if (oldImage is not null && wasRunning)
             {
                 report("Stopping previously installed ARFastSNTP service before file replacement...");
                 InstallerOperations.RunSc(new[] { "stop", InstallerOperations.ServiceName }, true, report);
@@ -147,6 +167,9 @@ internal static class InnoLifecycle
             report("SUCCESS: service RUNNING, startup=Automatic, mode=" +
                 (options.Lab ? "CLOCK SYNC" : "MONITOR") + ", source=" + options.Server + ":123");
             report("Actual clock synchronization is verified by later valid SNTP samples.");
+            // Cosmetic cleanup is deliberately non-fatal to the validated service.
+            try { LegacyShortcutCleanup.Reconcile(report); }
+            catch (Exception ex) { report("Legacy shortcut cleanup skipped: " + ex.Message); }
             Cleanup(report);
         }
         catch (Exception ex)
@@ -199,16 +222,37 @@ internal static class InnoLifecycle
             if (!InstallerOperations.WaitForState(1))
                 throw new TimeoutException("Service still running: cannot restore worker executable.");
         }
-        File.Copy(PreviousWorkerFile, InstallerOperations.InstalledWorker, overwrite: true);
+        string originalWorker = ServiceImageIdentity.ExtractExecutable(previousImage)
+            ?? throw new InvalidOperationException("Stored service executable failed identity validation.");
+        // Legacy PowerShell and WinForms releases may have used ProgramFiles(x86)
+        // or the historic ARFastSNTP root. Restore to the ORIGINAL executable.
+        File.Copy(PreviousWorkerFile, originalWorker, overwrite: true);
+        (bool wasRunning, int startType) = ReadPreviousState();
+        string startMode = startType == 2 ? "auto" : "demand";
         InstallerOperations.RunSc(new[]
             { "config", InstallerOperations.ServiceName, "binPath=", previousImage,
-              "start=", "auto" }, true, report);
-        InstallerOperations.RunSc(new[]
-            { "start", InstallerOperations.ServiceName }, true, report);
-        if (!InstallerOperations.WaitForState(4))
-            throw new TimeoutException("Previous service could not be restarted after recovery.");
-        report("RECOVERED: previous service worker and configuration restored.");
+              "start=", startMode }, true, report);
+        if (wasRunning)
+        {
+            InstallerOperations.RunSc(new[]
+                { "start", InstallerOperations.ServiceName }, true, report);
+            if (!InstallerOperations.WaitForState(4))
+                throw new TimeoutException("Previous service did not restart after recovery.");
+        }
+        if (startType == 4)
+            InstallerOperations.RunSc(new[]
+                { "config", InstallerOperations.ServiceName, "start=", "disabled" }, true, report);
+        report("RECOVERED: previous executable, start mode and running state restored.");
         Cleanup(report);
+    }
+
+    private static (bool WasRunning, int StartType) ReadPreviousState()
+    {
+        string[] parts = File.ReadAllText(PreviousStateFile).Trim().Split('|');
+        if (parts.Length != 2 || (parts[0] != "0" && parts[0] != "1") ||
+            !int.TryParse(parts[1], out int startType) || startType is < 2 or > 4)
+            throw new InvalidOperationException("Installer recovery state was corrupted.");
+        return (parts[0] == "1", startType);
     }
 
     private static void Cleanup(Action<string> report)
@@ -217,6 +261,9 @@ internal static class InnoLifecycle
         {
             if (File.Exists(PreviousImageFile)) File.Delete(PreviousImageFile);
             if (File.Exists(PreviousWorkerFile)) File.Delete(PreviousWorkerFile);
+            if (File.Exists(PreviousStateFile)) File.Delete(PreviousStateFile);
+            if (File.Exists(PreviousStateFile + ".new")) File.Delete(PreviousStateFile + ".new");
+            if (File.Exists(PreviousImageFile + ".new")) File.Delete(PreviousImageFile + ".new");
             if (Directory.Exists(RecoveryDirectory) &&
                 !Directory.EnumerateFileSystemEntries(RecoveryDirectory).Any())
                 Directory.Delete(RecoveryDirectory);
@@ -281,6 +328,32 @@ internal static class InnoLifecycle
     // Offline pure checks run under CI; no Windows Service or system clock mutation.
     internal static bool SelfTest()
     {
+        string canonical = InstallerOperations.InstalledWorker;
+        string currentImage = "\"" + canonical + "\" --server 192.16.1.175";
+        string x86 = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.ProgramFilesX86), "ARFastSNTP", "worker", "ARFastSNTP.exe");
+        string oldRoot = Path.Combine(Environment.GetFolderPath(
+            Environment.SpecialFolder.ProgramFiles), "ARFastSNTP", "ARFastSNTP.exe");
+        string developer = Path.Combine(
+            Path.GetPathRoot(InstallerOperations.InstallRoot) ?? @"C:\", "arintp", "worker", "ARFastSNTP.exe");
+        bool classifier =
+            ServiceImageIdentity.Classify(currentImage) ==
+                ServiceImageIdentity.Layout.CurrentProgramFiles &&
+            ServiceImageIdentity.IsOwned("\"" + x86 + "\" --server 192.16.1.175") &&
+            ServiceImageIdentity.IsOwned("\"" + oldRoot + "\" --server 192.16.1.175") &&
+            !ServiceImageIdentity.IsOwned("\"" + developer + "\" --server 192.16.1.175") &&
+            !ServiceImageIdentity.IsOwned(@"""C:\OtherApp\worker\ARFastSNTP.exe"" --server 127.0.0.1") &&
+            !ServiceImageIdentity.IsOwned(@"""C:\Program Files\ARFastSNTP\worker\ARFastSNTP.exe.bad"" --server 127.0.0.1") &&
+            !ServiceImageIdentity.IsOwned(@"""C:\Program Files\ARFastSNTP\worker\ntpd.exe""");
+        if (!classifier) return false;
+        string oldDashboard = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            "ARFastSNTP", "dashboard", "ARFastSNTP.Dashboard.exe");
+        if (!LegacyShortcutCleanup.IsKnownOldDashboard(oldDashboard) ||
+            LegacyShortcutCleanup.IsKnownOldDashboard(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                    "System32", "notepad.exe")))
+            return false;
         var sync = SetupArguments.Parse(new[] { "--server", "192.16.1.175",
             "--year", "2026", "--lab" });
         var monitor = SetupArguments.Parse(new[] { "--server", "192.16.1.175",

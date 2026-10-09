@@ -1,134 +1,158 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
-        Title="AR Fast SNTP Studio"
-        Width="1060" Height="680"
-        MinWidth="890" MinHeight="620"
+        Title="AR Fast SNTP"
+        Width="1020" Height="510"
+        MinWidth="900" MinHeight="440"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
-  <Grid Margin="20" RowDefinitions="46,110,74,*,104,24" RowSpacing="12">
-
-    <!-- Quiet, compact product hierarchy borrowed from Arssyut. -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-      <StackPanel Spacing="3" VerticalAlignment="Center">
-        <TextBlock Classes="title" Text="AR Fast SNTP Studio"/>
-        <TextBlock Classes="micro" Text="Windows time synchronization · live service monitor"/>
+  <Grid Margin="18" RowDefinitions="44,100,*,Auto" RowSpacing="12">
+    <!-- One calm navigation line. No installer or diagnostic prose in the monitor. -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+      <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+        <Viewbox Width="19" Height="19">
+          <Path Width="24" Height="24" Stretch="Uniform"
+                Data="M12 8v4l3 2 M12 22a10 10 0 1 0 0-20a10 10 0 0 0 0 20z"
+                Stroke="{DynamicResource ArBrush.Success}" StrokeThickness="1.8"
+                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+        </Viewbox>
+        <TextBlock Classes="section" Text="AR Fast SNTP" VerticalAlignment="Center"/>
       </StackPanel>
-      <Border Grid.Column="1"
-              VerticalAlignment="Center" Padding="12,7"
-              CornerRadius="{DynamicResource ArRadius.MD}"
-              Background="{DynamicResource ArBrush.Surface2}">
+      <Border Grid.Column="1" CornerRadius="{DynamicResource ArRadius.MD}"
+              Background="{DynamicResource ArBrush.Surface2}"
+              Padding="12,7" VerticalAlignment="Center">
         <StackPanel Orientation="Horizontal" Spacing="7">
-          <TextBlock x:Name="ServiceLamp" Text="●" Foreground="{DynamicResource ArBrush.TextDim}"/>
-          <TextBlock x:Name="ServiceState" Text="Waiting for service" Classes="muted"/>
+          <TextBlock x:Name="GlobalLamp" Text="●" Foreground="{DynamicResource ArBrush.TextDim}"/>
+          <TextBlock x:Name="GlobalStatus" Text="Checking..." FontWeight="SemiBold"/>
         </StackPanel>
       </Border>
+      <Button Grid.Column="2" Classes="ar" Width="36" Padding="4"
+              Click="Refresh_OnClick" ToolTip.Tip="Refresh current service status">
+        <Viewbox Width="17" Height="17">
+          <Path Width="24" Height="24" Stretch="Uniform"
+                Data="M20 11a8 8 0 0 0-14.5-5.5L3 8 M3 3v5h5 M4 13a8 8 0 0 0 14.5 5.5L21 16 M21 21v-5h-5"
+                Stroke="{DynamicResource ArBrush.Text}" StrokeThickness="1.8"
+                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+        </Viewbox>
+      </Button>
     </Grid>
 
-    <!-- Dates remain visible: year-scale clock jumps cannot be diagnosed using time alone. -->
-    <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12">
-      <Border Classes="panel" Padding="14">
-        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="3">
-          <TextBlock Text="REFERENCE SERVER · UTC" Classes="micro"/>
-          <TextBlock x:Name="ServerClock" Grid.Row="1"
-                     FontSize="29" FontWeight="SemiBold"
-                     VerticalAlignment="Center" Text="--:--:--"/>
-          <TextBlock x:Name="ServerDate" Grid.Row="2" Classes="muted" Text="No validated time sample"/>
-        </Grid>
-      </Border>
-      <Border Grid.Column="1" Classes="panel" Padding="14">
-        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="3">
-          <TextBlock Text="WINDOWS PC · UTC" Classes="micro"/>
-          <TextBlock x:Name="PcClock" Grid.Row="1"
-                     FontSize="29" FontWeight="SemiBold"
-                     VerticalAlignment="Center" Text="--:--:--"/>
+    <!-- Information-first: PC date and actual synchronization are dominant. -->
+    <Grid Grid.Row="1" ColumnDefinitions="1.12*,1*" ColumnSpacing="12">
+      <Border Classes="panel" Padding="15,11">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Text="PC TIME  ·  UTC" Classes="micro"/>
+          <TextBlock x:Name="PcClock" Grid.Row="1" Text="--:--:--"
+                     FontSize="30" FontWeight="SemiBold"
+                     VerticalAlignment="Center"/>
           <TextBlock x:Name="PcDate" Grid.Row="2" Classes="muted" Text="—"/>
         </Grid>
       </Border>
-    </Grid>
-
-    <Border Grid.Row="2" Classes="panel" Padding="12">
-      <Grid ColumnDefinitions="Auto,170,Auto,74,Auto,*"
-            ColumnSpacing="10" VerticalAlignment="Center">
-        <TextBlock Text="SNTP SERVER" Classes="micro" VerticalAlignment="Center"/>
-        <TextBox x:Name="ServerInput" Grid.Column="1"
-                 Classes="ar-input" Text="192.16.1.175"
-                 PlaceholderText="IPv4 address" VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="2" Text="YEAR" Classes="micro" VerticalAlignment="Center"/>
-        <TextBox x:Name="YearInput" Grid.Column="3"
-                 Classes="ar-input" Text="2026" VerticalAlignment="Center"/>
-        <Button x:Name="InstallSync" Grid.Column="4"
-                Classes="ar primary" Content="INSTALL &amp; SYNC"
-                Click="InstallSync_OnClick" MinWidth="142"
-                ToolTip.Tip="Configure Windows Service and keep synchronization running when this window closes."/>
-        <Button Grid.Column="5" Classes="ar" HorizontalAlignment="Right"
-                Content="Refresh status" Click="Refresh_OnClick"/>
-      </Grid>
-    </Border>
-
-    <Border Grid.Row="3" Classes="panel" Padding="14">
-      <Grid RowDefinitions="36,34,56,*,Auto" RowSpacing="7">
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBlock Text="NTP Server Explorer" Classes="section" VerticalAlignment="Center"/>
-          <Button Grid.Column="1" Classes="ar" Content="+ Add server"
-                  IsEnabled="False"
-                  ToolTip.Tip="Multi-server selection will be enabled after the canonical worker supports multiple peers."/>
+      <Border Classes="panel" Grid.Column="1" Padding="15,11">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Text="PC SYNCHRONIZATION" Classes="micro"/>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
+                      VerticalAlignment="Center">
+            <TextBlock x:Name="SyncLamp" Text="●" FontSize="18"
+                       Foreground="{DynamicResource ArBrush.TextDim}"/>
+            <TextBlock x:Name="SyncState" Text="Checking..."
+                       FontSize="21" FontWeight="SemiBold"/>
+          </StackPanel>
+          <TextBlock x:Name="SyncDetail" Grid.Row="2" Classes="muted"
+                     TextTrimming="CharacterEllipsis" Text="Waiting for service"/>
         </Grid>
-
-        <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface2}"
-                CornerRadius="{DynamicResource ArRadius.SM}"
-                Padding="12,0">
-          <Grid ColumnDefinitions="150,110,95,120,120,*">
-            <TextBlock Text="SERVER IP" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="HEALTH" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="2" Text="STRATUM" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="3" Text="OFFSET" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="4" Text="RTT" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="5" Text="LAST RESPONSE" Classes="micro" VerticalAlignment="Center"/>
-          </Grid>
-        </Border>
-
-        <Border Grid.Row="2" Classes="table-row" Padding="12,0">
-          <Grid ColumnDefinitions="150,110,95,120,120,*">
-            <TextBlock x:Name="PeerAddress" Text="—" VerticalAlignment="Center"/>
-            <TextBlock x:Name="PeerHealth" Grid.Column="1"
-                       Text="NO DATA" VerticalAlignment="Center" Classes="muted"/>
-            <TextBlock x:Name="PeerStratum" Grid.Column="2" Text="—" VerticalAlignment="Center"/>
-            <TextBlock x:Name="PeerOffset" Grid.Column="3" Text="—" VerticalAlignment="Center"/>
-            <TextBlock x:Name="PeerRtt" Grid.Column="4" Text="—" VerticalAlignment="Center"/>
-            <TextBlock x:Name="PeerLastReply" Grid.Column="5" Text="—" VerticalAlignment="Center"/>
-          </Grid>
-        </Border>
-
-        <StackPanel Grid.Row="3" Spacing="10" Margin="3,12,3,0">
-          <TextBlock x:Name="SyncHealth" Classes="section" Text="Awaiting validated SNTP response"/>
-          <TextBlock x:Name="StatusDescription" Classes="muted"
-                     TextWrapping="Wrap" Text="The Windows Service owns the time adjustment; this dashboard is read-only."/>
-          <TextBlock x:Name="Counters" Classes="muted"
-                     Text="Requests —   ·   Valid —   ·   Rejected —"/>
-        </StackPanel>
-
-        <TextBlock Grid.Row="4" Classes="micro"
-                   Text="Broadcast: not measured · Unicast SNTP replies are not evidence of broadcast."/>
-      </Grid>
-    </Border>
-
-    <Border Grid.Row="4" Classes="panel" Padding="14">
-      <Grid RowDefinitions="Auto,*,Auto" RowSpacing="5">
-        <TextBlock Text="Latest synchronization event" Classes="section"/>
-        <TextBlock x:Name="CorrectionEvent" Grid.Row="1" Classes="muted"
-                   TextWrapping="Wrap" Text="No clock correction has been reported."/>
-        <TextBlock x:Name="EventHint" Grid.Row="2" Classes="micro"
-                   Text="Corrections require explicit Windows Service configuration. Closing this dashboard never stops the service."/>
-      </Grid>
-    </Border>
-
-    <Grid Grid.Row="5" ColumnDefinitions="*,Auto">
-      <TextBlock x:Name="Footer" Classes="micro"
-                 Text="Live service snapshot · Local Windows only"/>
-      <TextBlock Grid.Column="1" Classes="micro"
-                 Text="Arssyut design tokens · compact graphite"/>
+      </Border>
     </Grid>
+
+    <!-- One real row until multi-peer worker/configuration is implemented.
+         No disabled Add Server, inert toggles or simulated NTP values. -->
+    <Border Grid.Row="2" Classes="panel" Padding="12,12,12,14">
+      <Grid RowDefinitions="30,34,56,*,Auto" RowSpacing="5">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="NTP Servers" Classes="section" VerticalAlignment="Center"/>
+          <TextBlock x:Name="ListCount" Grid.Column="1" Classes="micro"
+                     VerticalAlignment="Center" Text="1 source"/>
+        </Grid>
+        <Border Grid.Row="1" CornerRadius="{DynamicResource ArRadius.SM}"
+                Background="{DynamicResource ArBrush.Surface2}" Padding="10,0">
+          <Grid ColumnDefinitions="38,48,*,92,70,112,155,83" ColumnSpacing="7">
+            <TextBlock Text="#" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Use" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" Text="Server" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="3" Text="Status" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="4" Text="Stratum" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="5" Text="Offset" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="6" Text="Server UTC" Classes="micro" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="7" Text="Broadcast" Classes="micro" VerticalAlignment="Center"/>
+          </Grid>
+        </Border>
+        <Border Grid.Row="2" Classes="table-row" Padding="10,0">
+          <Grid ColumnDefinitions="38,48,*,92,70,112,155,83" ColumnSpacing="7">
+            <TextBlock Text="01" Classes="muted" VerticalAlignment="Center"/>
+            <TextBlock x:Name="EnabledState" Grid.Column="1" Text="—"
+                       VerticalAlignment="Center" Foreground="{DynamicResource ArBrush.TextDim}"
+                       ToolTip.Tip="Current source used by the Windows Service"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7"
+                        VerticalAlignment="Center">
+              <Viewbox Width="16" Height="16">
+                <Path Width="24" Height="24" Stretch="Uniform"
+                      Data="M4 4h16v6H4z M4 14h16v6H4z M8 7h.01 M8 17h.01"
+                      Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.75"
+                      StrokeLineCap="Round" StrokeLineJoin="Round"/>
+              </Viewbox>
+              <TextBlock x:Name="PeerAddress" Text="—" FontWeight="SemiBold"
+                         TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <TextBlock x:Name="PeerHealth" Grid.Column="3" Text="—"
+                       VerticalAlignment="Center" Classes="muted"/>
+            <TextBlock x:Name="PeerStratum" Grid.Column="4" Text="—"
+                       VerticalAlignment="Center"/>
+            <TextBlock x:Name="PeerOffset" Grid.Column="5" Text="—"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="PeerClock" Grid.Column="6" Text="—"
+                       VerticalAlignment="Center"/>
+            <TextBlock x:Name="PeerBroadcast" Grid.Column="7" Text="—"
+                       VerticalAlignment="Center"
+                       ToolTip.Tip="Only unicast SNTP is measured; broadcast remains unknown."/>
+          </Grid>
+        </Border>
+        <Border Grid.Row="4" BorderBrush="{DynamicResource ArBrush.Stroke}"
+                BorderThickness="0,1,0,0" Padding="2,8,2,0">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock x:Name="ConnectionHint" Classes="muted"
+                       TextTrimming="CharacterEllipsis" Text="Checking SNTP connection..."/>
+            <TextBlock x:Name="LastReply" Grid.Column="1" Classes="micro" Text="—"/>
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- Collapsed by default. A Lucide chevron gives a visible affordance. -->
+    <Border Grid.Row="3" Classes="panel" Padding="12">
+      <StackPanel Spacing="8">
+        <Button x:Name="HistoryToggle" Classes="ar" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" Click="History_OnClick">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <Viewbox Width="16" Height="16">
+              <Path x:Name="HistoryChevron" Width="24" Height="24"
+                    Stretch="Uniform" Data="M9 18l6-6-6-6"
+                    Stroke="{DynamicResource ArBrush.TextSecondary}"
+                    StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"/>
+            </Viewbox>
+            <TextBlock Grid.Column="1" Text="Status history"
+                       VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBlock x:Name="EventCount" Grid.Column="2" Classes="micro"
+                       VerticalAlignment="Center" Text="0 events"/>
+          </Grid>
+        </Button>
+        <ScrollViewer x:Name="HistoryScroll" IsVisible="False"
+                      MaxHeight="140" VerticalScrollBarVisibility="Auto">
+          <StackPanel x:Name="HistoryEvents" Spacing="6" Margin="8,2,8,6">
+            <TextBlock Classes="muted" Text="No correction events yet."/>
+          </StackPanel>
+        </ScrollViewer>
+      </StackPanel>
+    </Border>
   </Grid>
 </Window>

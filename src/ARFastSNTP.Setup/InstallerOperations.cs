@@ -61,8 +61,7 @@ internal static class InstallerOperations
 
     /// <summary>Only reconfigure the explicitly owned ARFastSNTP service.</summary>
     internal static bool IsOwnedImage(string image) =>
-        image.StartsWith("\"" + InstalledWorker + "\"",
-            StringComparison.OrdinalIgnoreCase);
+        ServiceImageIdentity.IsOwned(image);
 
     internal static string BuildImagePath(SetupArguments configuration)
     {

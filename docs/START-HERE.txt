@@ -1,31 +1,21 @@
-AR FAST SNTP — QUICK START
-===========================
+AR Fast SNTP — Windows setup v0.9.1 candidate
+===============================================
 
-Primary goal: INSTALL → SYNC → MONITOR.
+1. Get the latest successful ARFastSNTP-Inno-Windows-x64 GitHub Actions artifact.
+2. Extract its ZIP; run ARFastSNTP-Setup-Windows-x64.exe.
+3. Enter your trusted NTP server IPv4, select Next and finish setup.
+4. Existing PowerShell/WinForms/Inno service configurations are recognized
+   by the same canonical ARFastSNTP Windows Service name.
+5. One service runs in the background. Closing Avalonia Studio does NOT stop it.
 
-1. Download the latest GREEN ARFastSNTP-Windows-x64 GitHub Actions artifact.
-2. Extract entire ZIP.
-3. Open dashboard\ARFastSNTP.Dashboard.exe.
-4. Set SERVER IP and reference YEAR.
-5. On your authorized, isolated test PC, click INSTALL & SYNC and approve UAC.
-6. Setup automatically installs OR UPDATES the existing ARFastSNTP service.
-   No REMOVE SERVICE, mode picker, repeated confirmation, or PowerShell required.
-7. Check setup reports service RUNNING in LAB CLOCK CORRECTION mode.
-8. View server UTC, PC UTC, offset, RTT and correction events in dashboard.
-9. If state remains OFFSET, inspect worker status and correction events;
-   RUNNING alone does not prove time adjustment succeeded.
+Studio main view: PC Time, PC Sync Status, NTP Server table, collapsed History.
+No duplicate Install button; NTP era reference year is an advanced installer
+argument rather than a normal setup field.
 
-IMPORTANT:
-- CONNECT is *diagnostic monitoring only* and does not set Windows time.
-- An existing Monitor Only service will be upgraded in-place.
-- Other time-setting services may conflict; setup warns but does not stop them.
-- Only use forced time correction on an approved isolated certification PC.
-- Installer errors: C:\ProgramData\ARFastSNTP\setup.log
+On an installation failure, see
+C:\ProgramData\ARFastSNTP\setup.log
+and preserve the installer-recovery folder if present.
 
-Artifact layout:
-ARFastSNTP.Setup.exe       [GUI installer, sync by default]
-install-sync.cmd           [convenience shortcut]
-install-monitor.cmd        [optional monitor-only diagnostic]
-uninstall.cmd
-worker\ARFastSNTP.exe
-dashboard\ARFastSNTP.Dashboard.exe
+Only approved isolated test PCs may use system-clock stepping.
+Do not remove or overwrite another vendor's service to make setup succeed.
+The current worker supports one NTP source; multi-peer is a future milestone.
