@@ -1,3 +1,24 @@
+> **v0.10.0 update:** The multi-NTP architecture in
+> [MULTI-NTP-ARCHITECTURE.md](MULTI-NTP-ARCHITECTURE.md) supersedes the
+> historical single-server Studio/2-byte toggle descriptions below.
+> The old notes are retained as migration-regression history.
+
+### Multi-server release candidate gates
+
+- [ ] 1 / 2 / 3 / 16 enabled servers: independent replies and history.
+- [ ] Add/Delete/Enable/Disable persists without SCM restart or UAC prompt.
+- [ ] 3 responding sources, one outlier: exclude outlier; keep selected server.
+- [ ] 2 conflicting sources: hold correction and show conflict visibly.
+- [ ] One remaining trusted responder: verify degraded fallback after samples.
+- [ ] A source deleted mid-poll cannot correct Windows after IPC ACK.
+- [ ] All sources OFF: zero further NTP UDP polling and zero correction calls.
+- [ ] Upgrade 0.9.3 to 0.10.0 retains IP, user configuration and rollback.
+- [ ] Windows named pipe permissions tested under standard interactive account.
+- [ ] UI at 100/125/150/200% DPI and long 16-peer + History expansion.
+- [ ] Broadcast remains unmeasured until explicit receiver is implemented.
+- [ ] Multi-year clock-step recovery and network drop test on isolated PC.
+- [ ] 24-hour memory/handle/CPU and status-file size soak test.
+
 # AR Fast SNTP — installer and compact UI acceptance matrix
 
 Scope: Windows x64 only. This document is the release gate for PR #1.

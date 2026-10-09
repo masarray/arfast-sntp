@@ -2,7 +2,7 @@
 [Setup]
 AppId={{A9AEFEC9-42AE-4BDC-A69C-F2053D0D97A0}
 AppName=AR Fast SNTP
-AppVersion=0.9.3
+AppVersion=0.10.0
 DefaultDirName={autopf}\ARFastSNTP
 UsePreviousAppDir=no
 DisableDirPage=yes
@@ -12,6 +12,8 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+WizardSizePercent=100,100
+WizardResizable=no
 OutputDir=..\installer-out
 OutputBaseFilename=ARFastSNTP-Setup-Windows-x64
 Compression=lzma2
@@ -35,6 +37,10 @@ Source: "..\docs\DESIGN-TOKEN-PROVENANCE.md"; DestDir: "{app}\licenses"; Flags: 
 ; Service-owned ON/OFF preference persists across upgrades and reboots,
 ; but is removed on an explicit full uninstall.
 Root: HKLM; Subkey: "SOFTWARE\ARFastSNTP"; Flags: uninsdeletekey
+
+[UninstallDelete]
+; A full uninstall removes NTP source preferences, but preserves diagnostics.
+Type: files; Name: "{commonappdata}\ARFastSNTP\peers.json"
 
 [Icons]
 Name: "{autoprograms}\AR Fast SNTP"; Filename: "{app}\studio\ARFastSNTP.Studio.exe"
@@ -97,11 +103,19 @@ begin
   if (StrToIntDef(Yr, 0) < 2020) or (StrToIntDef(Yr, 0) > 2090) then Yr := '2026';
   ServerPage := CreateInputQueryPage(wpWelcome, 'NTP Server',
     'Enter NTP Server IP Address',
-    'This PC will check the NTP server automatically after installation.');
-  ServerPage.Add('NTP Server IP Address:', False);
+    'Enter your first NTP server. More can be added later in AR Fast SNTP.');
+  ServerPage.Add('Server IP Address:', False);
   ServerPage.Values[0] := Ip;
   ServerIp := Ip;
   ServerYear := Yr;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = ServerPage.ID) and
+    FileExists(ExpandConstant('{commonappdata}\ARFastSNTP\peers.json'));
+  { An existing multi-server configuration belongs to the installed service.
+    Never overwrite it merely because Setup is being upgraded. }
 end;
 
 function NextButtonClick(PageID: Integer): Boolean;

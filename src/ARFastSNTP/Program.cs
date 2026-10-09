@@ -77,12 +77,20 @@ await Host.CreateDefaultBuilder()
         // One canonical source state, shared by the control pipe and SNTP
         // poller; Windows Service remains running across UI enable/disable.
         services.AddSingleton(SourceControlState.LoadWindows());
-        services.AddHostedService(provider => new SourceControlPipeService(
-            provider.GetRequiredService<SourceControlState>(),
-            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SourceControlPipeService>>()));
-        services.AddHostedService(provider => new SyncWorker(options,
-            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncWorker>>(),
-            provider.GetRequiredService<SourceControlState>()));
+        // The old global ON/OFF endpoint is deliberately not hosted in the
+        // multi-server release: all writes now target a specific peer. This
+        // prevents an outdated Studio instance from disabling unrelated peers.
+        services.AddSingleton(provider =>
+            PeerCatalog.Load(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "ARFastSNTP", "peers.json"),
+                options.Server, provider.GetRequiredService<SourceControlState>()));
+        services.AddHostedService(provider => new PeerControlService(
+            provider.GetRequiredService<PeerCatalog>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PeerControlService>>()));
+        services.AddHostedService(provider => new MultiPeerWorker(options,
+            provider.GetRequiredService<PeerCatalog>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<MultiPeerWorker>>()));
     })
     .Build()
     .RunAsync();

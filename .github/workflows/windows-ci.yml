@@ -66,6 +66,8 @@ jobs:
             if ($status.StepEnabled) { throw 'Monitor worker unexpectedly has clock stepping enabled' }
             if ($status.Server -ne '127.0.0.1') { throw 'Wrong status server' }
             if ($status.RequestCount -lt 1) { throw 'Worker issued no SNTP requests' }
+            if (@($status.Peers).Count -ne 1) { throw 'Per-peer worker status missing' }
+            if ($status.Peers[0].Address -ne '127.0.0.1') { throw 'Wrong source in canonical list' }
             if ($process.HasExited) { throw 'Worker unexpectedly stopped' }
           } finally {
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
@@ -98,39 +100,33 @@ jobs:
             throw 'Compact monitor must not expose installer/era/placeholder controls'
           }
           if (-not $xaml.Contains('HistoryScroll') -or
-              -not $xaml.Contains('PeerBroadcast') -or
-              -not $xaml.Contains('PcClock') -or
-              -not $xaml.Contains('ServerIcon') -or
-              -not $xaml.Contains('SourceTrack') -or
-              -not $xaml.Contains('SourceThumb') -or
-              -not $xaml.Contains('ToggleSource_OnClick') -or
-              -not $xaml.Contains('Text="PC TIME"') -or
-              -not $xaml.Contains('Width="34" Height="19"')) {
-            throw 'Compact monitor lost small switch, server icon or required sections'
+              -not $xaml.Contains('ItemsControl ItemsSource="{Binding Rows}"') -or
+              -not $xaml.Contains('AddServer_OnClick') -or
+              -not $xaml.Contains('PeerToggle_OnClick') -or
+              -not $xaml.Contains('PeerDelete_OnClick') -or
+              -not $xaml.Contains('SizeToContent="Height"')) {
+            throw 'Multi-peer Explorer or content-sized layout is missing'
           }
-          if ($xaml.Contains('GlobalStatus') -or
-              $xaml.Contains('SyncDetail') -or
-              $xaml.Contains('LastReply') -or
-              $xaml.Contains('x:Name="SwitchIcon"')) {
-            throw 'Noisy status fields or oversized/obsolete controls returned'
+          if ($xaml.Contains('x:Name="SourceToggle"') -or
+              $xaml.Contains('Content="+ Add server"')) {
+            throw 'Old single-server UI was accidentally restored'
           }
           $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
-          if (-not $viewCode.Contains('_serverIcon.Fill = enabled ? green : gray') -or
-              -not $viewCode.Contains('if (!changed && _lastUnavailableKey is null)') -or
-              -not $viewCode.Contains('if (!string.Equals(target.Text, value') -or
-              -not $viewCode.Contains('SourceControlProtocol.SendAsync')) {
-            throw 'Missing server color, status coalescing or real source IPC'
+          if (-not $viewCode.Contains('PeerControlProtocol.SendAsync') -or
+              -not $viewCode.Contains('ReconcileRows') -or
+              -not $viewCode.Contains('Rows.Move(')) {
+            throw 'UI must bind to live canonical peer controls and preserve rows'
           }
           if ($viewCode.Contains('Verb = "runas"') -or
-              $viewCode.Contains('Process.Start(') -or
-              $viewCode.Contains('SourceServiceControl.SetEnabled')) {
-            throw 'A source toggle must not launch a privileged helper or stop SCM service'
+              $viewCode.Contains('Process.Start(')) {
+            throw 'Server add/toggle/delete must never install or relaunch a service'
           }
-          $poll = Get-Content 'src/ARFastSNTP/SyncWorker.cs' -Raw
-          if (-not $poll.Contains('WaitUntilChangedAsync') -or
-              -not $poll.Contains('TrySetTime') -or
-              -not $poll.Contains('SourceEnabled = _source.Enabled')) {
-            throw 'Worker lacks persisted NTP pause, correction barrier or status truth'
+          $worker = Get-Content 'src/ARFastSNTP/MultiPeerWorker.cs' -Raw
+          if (-not $worker.Contains('PeerElection.Choose') -or
+              -not $worker.Contains('PeerCatalog') -or
+              -not $worker.Contains('TryStep(') -or
+              -not $worker.Contains('new SemaphoreSlim(4)')) {
+            throw 'Missing bounded peer polling, source selection, or step barrier'
           }
           $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
           if (-not $wizard.Contains('Enter NTP Server IP Address') -or

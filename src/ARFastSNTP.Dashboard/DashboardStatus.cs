@@ -24,6 +24,9 @@ internal sealed record DashboardStatus
     public byte? Stratum { get; init; }
     public DateTimeOffset? LastCorrectionUtc { get; init; }
     public string Broadcast { get; init; } = "Not measured";
+    public string? SelectedServer { get; init; }
+    public bool Degraded { get; init; }
+    public DashboardPeer[] Peers { get; init; } = Array.Empty<DashboardPeer>();
     public string[]? RecentCorrections { get; init; }
 
     internal static bool TryParse(string json, out DashboardStatus? status, out string reason)
@@ -74,4 +77,19 @@ internal sealed record DashboardStatus
 
     internal string? LatestEvent => !string.IsNullOrWhiteSpace(LastEvent) ? LastEvent :
         RecentCorrections is { Length: > 0 } ? RecentCorrections[^1] : null;
+}
+
+/// <summary>Backward-compatible per-peer status row; no UI dependency.</summary>
+internal sealed record DashboardPeer
+{
+    public string Address { get; init; } = "";
+    public bool Enabled { get; init; }
+    public string State { get; init; } = "Waiting";
+    public double? OffsetMilliseconds { get; init; }
+    public double? RttMilliseconds { get; init; }
+    public byte? Stratum { get; init; }
+    public DateTimeOffset? EstimatedServerUtc { get; init; }
+    public string? Error { get; init; }
+    public bool Selected { get; init; }
+    public int ValidStreak { get; init; }
 }

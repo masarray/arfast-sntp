@@ -1,98 +1,74 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
-using ARFastSNTP;
-using Microsoft.Win32;
 using System.Globalization;
+using System.Net;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ARFastSNTP;
 using ARFastSNTP.Dashboard;
 using ARFastSNTP.Studio.Design;
 
 namespace ARFastSNTP.Studio;
 
 /// <summary>
-/// Passive Windows monitor. Single coalesced status-file reader, no service
-/// mutation or sockets in UI. All staleness detection after first observation
-/// uses monotonic time so multi-year wall clock corrections do not break the UI.
+/// Compact view of the service-owned catalog. GUI reads bounded status and
+/// sends fixed local pipe commands only; it never opens NTP sockets, writes
+/// ProgramData configuration, restarts SCM or changes Windows time.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    public ObservableCollection<PeerRowModel> Rows { get; } = new();
     private readonly TextBlock _pcClock;
     private readonly TextBlock _pcDate;
-    private readonly TextBlock _syncLamp;
     private readonly TextBlock _syncState;
-    private readonly TextBlock _peerAddress;
-    private readonly Avalonia.Controls.Shapes.Path _serverIcon;
-    private readonly Border _sourceTrack;
-    private readonly Avalonia.Controls.Shapes.Ellipse _sourceThumb;
-    private readonly Button _sourceToggle;
-    private readonly TextBlock _peerHealth;
-    private readonly TextBlock _peerStratum;
-    private readonly TextBlock _peerOffset;
-    private readonly TextBlock _peerClock;
-    private readonly TextBlock _peerBroadcast;
-    private readonly TextBlock _connectionHint;
+    private readonly TextBlock _syncLamp;
+    private readonly TextBlock _serverCount;
+    private readonly TextBlock _hint;
     private readonly TextBlock _eventCount;
-    private readonly StackPanel _historyEvents;
+    private readonly StackPanel _history;
     private readonly ScrollViewer _historyScroll;
-    private readonly Avalonia.Controls.Shapes.Path _historyChevron;
+    private readonly Avalonia.Controls.Shapes.Path _chevron;
+    private readonly Button _add;
     private readonly DispatcherTimer _timer;
-    private readonly Stopwatch _lastFileChange = new();
-    private readonly Stopwatch _serverClock = new();
-    private readonly CancellationTokenSource _shutdown = new();
-    private readonly string _statusPath = System.IO.Path.Combine(
+    private readonly CancellationTokenSource _closedToken = new();
+    private readonly Stopwatch _freshness = new();
+    private readonly string _statusPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "ARFastSNTP", "status.json");
 
-    private string? _lastSnapshot;
-    private string? _lastEventsSignature;
-    private string _lastKnownServer = "—";
-    private DateTimeOffset? _baseServerUtc;
-    private bool _lastSampleValid;
+    private NtpPeer[] _config = Array.Empty<NtpPeer>();
+    private bool _catalogReady;
+    private bool _catalogLoading;
     private bool _reading;
+    private bool _editing;
     private bool _closed;
-    private bool _historyExpanded;
+    private bool _historyOpen;
     private int _ticks;
-    private double _heightBeforeHistory;
-    private bool _configuredEnabled;
-    private bool _serviceInstalled;
-    private bool _serviceStateKnown;
-    private bool _sourceActionPending;
-    private bool _controlAvailable;
-    private bool _controlReading;
-    private string? _lastUnavailableKey;
-    private string? _displayedTimezone;
-    private static readonly string ChevronDown =
-        "m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
-    private static readonly string ChevronUp =
-        "m357-384 123-123 123 123 57-56-180-180-180 180 57 56ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
+    private string? _lastJson;
+    private string? _lastEvents;
+    private string _timezone = "";
+    private static readonly string ChevronDown = "m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
+    private static readonly string ChevronUp = "m357-384 123-123 123 123 57-56-180-180-180 180 57 56ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
 
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
-        _pcClock = Required<TextBlock>("PcClock");
-        _pcDate = Required<TextBlock>("PcDate");
-        _syncLamp = Required<TextBlock>("SyncLamp");
-        _syncState = Required<TextBlock>("SyncState");
-        _peerAddress = Required<TextBlock>("PeerAddress");
-        _serverIcon = Required<Avalonia.Controls.Shapes.Path>("ServerIcon");
-        _sourceTrack = Required<Border>("SourceTrack");
-        _sourceThumb = Required<Avalonia.Controls.Shapes.Ellipse>("SourceThumb");
-        _sourceToggle = Required<Button>("SourceToggle");
-        _peerHealth = Required<TextBlock>("PeerHealth");
-        _peerStratum = Required<TextBlock>("PeerStratum");
-        _peerOffset = Required<TextBlock>("PeerOffset");
-        _peerClock = Required<TextBlock>("PeerClock");
-        _peerBroadcast = Required<TextBlock>("PeerBroadcast");
-        _connectionHint = Required<TextBlock>("ConnectionHint");
-        _eventCount = Required<TextBlock>("EventCount");
-        _historyEvents = Required<StackPanel>("HistoryEvents");
-        _historyScroll = Required<ScrollViewer>("HistoryScroll");
-        _historyChevron = Required<Avalonia.Controls.Shapes.Path>("HistoryChevron");
-
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        DataContext = this;
+        _pcClock = Require<TextBlock>("PcClock");
+        _pcDate = Require<TextBlock>("PcDate");
+        _syncState = Require<TextBlock>("SyncState");
+        _syncLamp = Require<TextBlock>("SyncLamp");
+        _serverCount = Require<TextBlock>("ListCount");
+        _hint = Require<TextBlock>("ConnectionHint");
+        _eventCount = Require<TextBlock>("EventCount");
+        _history = Require<StackPanel>("HistoryEvents");
+        _historyScroll = Require<ScrollViewer>("HistoryScroll");
+        _chevron = Require<Avalonia.Controls.Shapes.Path>("HistoryChevron");
+        _add = Require<Button>("AddServerButton");
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += OnTick;
         _timer.Start();
         Closed += (_, _) =>
@@ -100,189 +76,202 @@ public sealed partial class MainWindow : Window
             _closed = true;
             _timer.Stop();
             _timer.Tick -= OnTick;
-            _shutdown.Cancel();
-            _lastFileChange.Stop();
-            _serverClock.Stop();
-            _shutdown.Dispose();
+            _closedToken.Cancel();
         };
-        RefreshClock();
-        RefreshServiceState();
-        _ = CheckControlAsync();
-        _ = PollStatusAsync();
+        UpdatePcClock();
+        _ = RefreshCatalogAsync();
+        _ = RefreshStatusAsync();
     }
 
-    private T Required<T>(string name) where T : Control =>
-        this.FindControl<T>(name)
-        ?? throw new InvalidOperationException("Missing Studio component: " + name);
+    private T Require<T>(string name) where T : Control =>
+        this.FindControl<T>(name) ??
+        throw new InvalidOperationException("Missing component: " + name);
+
+    private static void Set(TextBlock target, string text)
+    {
+        if (target.Text != text) target.Text = text;
+    }
 
     private void OnTick(object? sender, EventArgs e)
     {
-        RefreshClock();
-        if (++_ticks % 2 != 0) return; // one status tick per second
-        if (_ticks % 4 == 0) RefreshServiceState();
-        if (_ticks % 10 == 0) _ = CheckControlAsync();
-        if (_configuredEnabled && _lastSnapshot is not null &&
-            _lastFileChange.IsRunning &&
-            _lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
-            ShowUnavailable("NTP data is out of date.");
-        // Never suspend polling when stale: this is how the monitor recovers
-        // automatically when the worker/service resumes producing snapshots.
-        _ = PollStatusAsync();
+        UpdatePcClock();
+        foreach (var row in Rows) row.Tick();
+        _ticks++;
+        if (_ticks % 2 == 0) _ = RefreshStatusAsync();
+        if (_ticks % 5 == 0) _ = RefreshCatalogAsync();
+        if (_freshness.IsRunning && _freshness.Elapsed > TimeSpan.FromSeconds(15))
+            SetSync("Service offline", false);
     }
 
-    // Avoid reassigning identical Text properties on every timer tick.
-    // A stable status label is not an animation and should not flicker.
-    private static void SetText(TextBlock target, string value)
+    private void UpdatePcClock()
     {
-        if (!string.Equals(target.Text, value, StringComparison.Ordinal))
-            target.Text = value;
-    }
-
-    private void RefreshClock()
-    {
-        // Display what the operator sees in Windows Settings. All SNTP math
-        // remains UTC, and the timezone is a visual-only conversion.
-        DateTimeOffset pcLocal = DateTimeOffset.Now;
-        SetText(_pcClock, pcLocal.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
-        SetText(_pcDate, pcLocal.ToString("ddd, dd MMM yyyy",
-            CultureInfo.InvariantCulture));
-        string timezone = pcLocal.ToString("zzz", CultureInfo.InvariantCulture);
-        if (!string.Equals(timezone, _displayedTimezone, StringComparison.Ordinal))
+        DateTimeOffset now = DateTimeOffset.Now;
+        Set(_pcClock, now.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+        Set(_pcDate, now.ToString("dd MMM yyyy", CultureInfo.InvariantCulture));
+        string zone = now.ToString("zzz", CultureInfo.InvariantCulture);
+        if (_timezone != zone)
         {
-            _displayedTimezone = timezone;
-            ToolTip.SetTip(_pcClock, "Local Windows time · UTC" + timezone);
+            _timezone = zone;
+            ToolTip.SetTip(_pcClock, "Windows local time · UTC" + zone);
         }
-        if (_lastSampleValid && _baseServerUtc is DateTimeOffset reference &&
-            _lastFileChange.Elapsed <= TimeSpan.FromSeconds(12))
-        {
-            DateTimeOffset estimate = reference + _serverClock.Elapsed;
-            var local = estimate.ToLocalTime();
-            string next = local.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-            if (!string.Equals(_peerClock.Text, next, StringComparison.Ordinal))
-            {
-                SetText(_peerClock, next);
-                ToolTip.SetTip(_peerClock, "Server: " +
-                    local.ToString("ddd, dd MMM yyyy HH:mm:ss zzz",
-                        CultureInfo.InvariantCulture));
-            }
-        }
-        else
-            SetText(_peerClock, "—");
     }
 
-    private async Task PollStatusAsync()
+    private async Task RefreshCatalogAsync()
     {
-        if (_closed || _reading || _sourceActionPending) return;
-        _reading = true;
+        if (_closed || _catalogLoading || _editing) return;
+        _catalogLoading = true;
         try
         {
-            if (!_serviceInstalled)
-            {
-                ShowUnavailable("NTP service is not installed.");
-                return;
-            }
-            var info = new FileInfo(_statusPath);
-            if (!info.Exists)
-            {
-                ShowUnavailable("Sync service not detected.");
-                return;
-            }
-            if (info.Length > 64 * 1024)
-            {
-                ShowUnavailable("Service data unavailable.");
-                return;
-            }
-            string json = await File.ReadAllTextAsync(_statusPath, _shutdown.Token);
+            var response = await PeerControlProtocol.SendAsync(
+                "list", null, _closedToken.Token);
             if (_closed) return;
-            if (!DashboardStatus.TryParse(json, out var snap, out _) || snap is null)
+            _catalogReady = response.Ok;
+            if (response.Ok)
             {
-                ShowUnavailable("Service data unavailable.");
-                return;
+                _config = response.Peers ?? Array.Empty<NtpPeer>();
+                ReconcileRows();
             }
-
-            bool changed = !string.Equals(json, _lastSnapshot, StringComparison.Ordinal);
-            if (changed)
-            {
-                _lastSnapshot = json;
-                _lastFileChange.Restart();
-            }
-
-            if (_lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
-            {
-                ShowUnavailable("NTP data is out of date.");
-                return;
-            }
-            if (!changed && _lastUnavailableKey is null)
-                return; // no data change -> no label, brush or clock rebinding
-            _lastUnavailableKey = null;
-
-            // The worker writes its snapshot in local PC wall time; the PC may
-            // jump by years between two valid replies. Never use updated-UTC
-            // subtraction to pronounce a fresh snapshot offline.
-            _lastKnownServer = snap.Server;
-            SetText(_peerAddress, snap.Server);
-            var view = StudioStatusPresenter.Create(snap);
-            if (!_configuredEnabled)
-            {
-                // On/off comes from protected registry + authenticated pipe,
-                // not from a stale legacy snapshot written before OFF.
-                ShowUnavailable("NTP source is off.");
-                UpdateHistory(snap);
-                return;
-            }
-            _lastSampleValid = view.ValidReply;
-            SetText(_syncState, view.PcSync);
-            SetText(_peerHealth, view.ServerHealth);
-            SetText(_peerStratum, view.Stratum);
-            SetText(_peerOffset, view.ServerOffset);
-            SetText(_peerBroadcast, "—");
-            SetText(_connectionHint, view.Footer);
-            _connectionHint.IsVisible = !string.IsNullOrWhiteSpace(view.Footer);
-            var syncColor = BrushResolver.Require(this,
-                view.Synchronized ? "ArBrush.Success" : "ArBrush.Warning");
-            if (!ReferenceEquals(_syncLamp.Foreground, syncColor))
-                _syncLamp.Foreground = syncColor;
-            var peerColor = BrushResolver.Require(this,
-                view.ValidReply ? "ArBrush.Success" : "ArBrush.Warning");
-            if (!ReferenceEquals(_peerHealth.Foreground, peerColor))
-                _peerHealth.Foreground = peerColor;
-
-            if (view.ValidReply && snap.EstimatedServerUtc is DateTimeOffset server)
-            {
-                // Rebase a monotonic clock only for a genuine discontinuity.
-                // Rebinding every 1s NTP status write made seconds stall/jump.
-                double age = (DateTimeOffset.UtcNow - snap.UpdatedUtc).TotalSeconds;
-                if (age is >= 0 and <= 12)
-                    server = server.AddSeconds(age);
-                DateTimeOffset estimatedNow = _baseServerUtc is DateTimeOffset baseUtc
-                    ? baseUtc + _serverClock.Elapsed
-                    : server;
-                if (_baseServerUtc is null || !_serverClock.IsRunning ||
-                    Math.Abs((server - estimatedNow).TotalSeconds) >= 0.8)
-                {
-                    _baseServerUtc = server;
-                    _serverClock.Restart();
-                }
-            }
-            else
-            {
-                _baseServerUtc = null;
-                _serverClock.Reset();
-            }
-
-            UpdateHistory(snap);
-            RefreshClock();
         }
-        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-            or ArgumentException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or TimeoutException or
+            UnauthorizedAccessException or InvalidDataException or
+            OperationCanceledException)
         {
-            if (!_closed) ShowUnavailable("Unable to read service status.");
+            if (_closed) return;
+            _catalogReady = false;
+            _hint.IsVisible = Rows.Count == 0;
+            if (Rows.Count == 0)
+                Set(_hint, "Waiting for NTP service...");
         }
         finally
         {
-            _reading = false;
+            _catalogLoading = false;
+            if (!_closed) RefreshButtons();
         }
+    }
+
+    private void ReconcileRows()
+    {
+        if (_closed) return;
+        var addresses = _config.Select(p => p.Address).ToArray();
+        for (int i = Rows.Count - 1; i >= 0; i--)
+            if (!addresses.Contains(Rows[i].Address, StringComparer.Ordinal))
+                Rows.RemoveAt(i);
+
+        for (int i = 0; i < _config.Length; i++)
+        {
+            var entry = _config[i];
+            var row = Rows.FirstOrDefault(r => r.Address == entry.Address);
+            if (row is null)
+            {
+                row = new PeerRowModel(entry.Address, i + 1, entry.Enabled,
+                    BrushResolver.Require(this, "ArBrush.Success"),
+                    BrushResolver.Require(this, "ArBrush.TextDim"),
+                    BrushResolver.Require(this, "ArBrush.StrokeStrong"),
+                    BrushResolver.Require(this, "ArBrush.Text"),
+                    BrushResolver.Require(this, "ArBrush.Warning"));
+                Rows.Insert(i, row);
+            }
+            else if (Rows.IndexOf(row) != i)
+                Rows.Move(Rows.IndexOf(row), i);
+            row.SetIndex(i + 1);
+            row.SetEnabled(entry.Enabled);
+        }
+        Set(_serverCount, Rows.Count == 1 ? "1 server" : Rows.Count + " servers");
+        RefreshButtons();
+    }
+
+    private void RefreshButtons()
+    {
+        _add.IsEnabled = _catalogReady && !_editing &&
+            _config.Length < 16;
+        foreach (var row in Rows)
+            row.SetCanChange(_catalogReady && !_editing);
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        if (_closed || _reading || _editing) return;
+        _reading = true;
+        try
+        {
+            var info = new FileInfo(_statusPath);
+            if (!info.Exists || info.Length is <= 0 or > 131072)
+            {
+                SetSync("Service offline", false);
+                return;
+            }
+            string json = await File.ReadAllTextAsync(_statusPath, _closedToken.Token);
+            if (_closed) return;
+            if (!DashboardStatus.TryParse(json, out var snap, out _) || snap is null)
+            {
+                SetSync("Status unavailable", false);
+                return;
+            }
+            if (json == _lastJson) return;
+            _lastJson = json;
+            _freshness.Restart();
+            if (snap.Peers.Length > 0)
+            {
+                if (!_catalogReady)
+                {
+                    _config = snap.Peers.Select(p => new NtpPeer(p.Address, p.Enabled)).ToArray();
+                    ReconcileRows();
+                }
+                foreach (var row in Rows)
+                {
+                    var peer = snap.Peers.FirstOrDefault(p => p.Address == row.Address);
+                    if (peer is not null)
+                        row.Apply(peer);
+                }
+            }
+            else if (!_catalogReady && Rows.Count == 0 &&
+                IPAddress.TryParse(snap.Server, out _))
+            {
+                _config = new[] { new NtpPeer(snap.Server, snap.SourceEnabled) };
+                ReconcileRows();
+            }
+            bool verified = snap.State == "Synchronized" &&
+                !string.IsNullOrEmpty(snap.SelectedServer ?? snap.Server) &&
+                snap.OffsetMilliseconds.HasValue &&
+                snap.EstimatedServerUtc.HasValue;
+            string global = verified ? snap.Degraded ? "Synced (fallback)" : "Synced"
+                : snap.State switch
+                {
+                    "NTP off" or "Disabled" => "NTP off",
+                    "Source conflict" => "Server conflict",
+                    "Correcting" => "Correcting time",
+                    "No reply" => "No reply",
+                    _ => "Not synced"
+                };
+            SetSync(global, verified);
+            if (snap.State is "Source conflict" or "No reply" or "Correction failed")
+            {
+                _hint.IsVisible = true;
+                Set(_hint, snap.State == "Source conflict"
+                    ? "Servers disagree on time. Correction paused."
+                    : snap.State == "No reply"
+                        ? "No valid NTP reply. Check server IP and UDP 123."
+                        : "Windows did not accept the time correction.");
+            }
+            else _hint.IsVisible = false;
+            UpdateHistory(snap);
+        }
+        catch (OperationCanceledException) when (_closed) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+            InvalidOperationException)
+        {
+            if (!_closed) SetSync("Service offline", false);
+        }
+        finally { _reading = false; }
+    }
+
+    private void SetSync(string state, bool synced)
+    {
+        Set(_syncState, state);
+        var brush = BrushResolver.Require(this,
+            synced ? "ArBrush.Success" : "ArBrush.Warning");
+        if (!ReferenceEquals(_syncLamp.Foreground, brush))
+            _syncLamp.Foreground = brush;
     }
 
     private void UpdateHistory(DashboardStatus snap)
@@ -290,212 +279,97 @@ public sealed partial class MainWindow : Window
         var events = (snap.RecentCorrections ?? Array.Empty<string>())
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .TakeLast(16).Reverse().ToList();
-        // An unreachable server has no correction events. Preserve the actual
-        // last error in the expanded History instead of showing an empty panel.
         if (!string.IsNullOrWhiteSpace(snap.LastEvent) &&
-            !events.Any(entry => entry.Contains(snap.LastEvent,
-                StringComparison.Ordinal)))
+            !events.Any(e => e.Contains(snap.LastEvent, StringComparison.Ordinal)))
             events.Insert(0, snap.LastEvent);
         if (events.Count > 16) events.RemoveAt(events.Count - 1);
-        string signature = string.Join("\n", events);
-        if (string.Equals(signature, _lastEventsSignature, StringComparison.Ordinal))
-            return;
-        _lastEventsSignature = signature;
-        _eventCount.Text = events.Count == 1 ? "1 event" : $"{events.Count} events";
-        _historyEvents.Children.Clear();
-        if (events.Count == 0)
-        {
-            _historyEvents.Children.Add(new TextBlock
+        string key = string.Join("\n", events);
+        if (_lastEvents == key) return;
+        _lastEvents = key;
+        Set(_eventCount, events.Count == 1 ? "1 event" : events.Count + " events");
+        _history.Children.Clear();
+        if (events.Count == 0) events.Add("No events yet.");
+        foreach (string text in events)
+            _history.Children.Add(new TextBlock
             {
-                Text = "No events yet.",
-                Foreground = BrushResolver.Require(this, "ArBrush.TextSecondary")
-            });
-            return;
-        }
-        foreach (string evt in events)
-        {
-            _historyEvents.Children.Add(new TextBlock
-            {
-                Text = evt,
+                Text = text,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = BrushResolver.Require(this, "ArBrush.TextSecondary")
             });
+    }
+
+    private async Task ChangePeerAsync(string action, string address)
+    {
+        if (_closed || _editing || !_catalogReady) return;
+        _editing = true;
+        RefreshButtons();
+        try
+        {
+            var response = await PeerControlProtocol.SendAsync(
+                action, address, _closedToken.Token);
+            if (_closed) return;
+            if (!response.Ok)
+            {
+                _hint.IsVisible = true;
+                Set(_hint, response.Error ?? "NTP server change was refused.");
+                return;
+            }
+            _config = response.Peers;
+            ReconcileRows();
+            _lastJson = null;
+            _ = RefreshStatusAsync();
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or
+            UnauthorizedAccessException or InvalidDataException or
+            OperationCanceledException)
+        {
+            if (!_closed)
+            {
+                _hint.IsVisible = true;
+                Set(_hint, "Cannot contact NTP service. Try Refresh.");
+            }
+        }
+        finally
+        {
+            _editing = false;
+            if (!_closed) RefreshButtons();
         }
     }
 
-    private void ShowUnavailable(string message)
+    private async void AddServer_OnClick(object? sender, RoutedEventArgs e)
     {
-        string key = (_configuredEnabled ? "on" : "off") + "|" +
-            (_serviceInstalled ? "installed" : "missing") + "|" + message;
-        if (string.Equals(_lastUnavailableKey, key, StringComparison.Ordinal))
-            return; // do not repaint an unchanged failure every second
-        _lastUnavailableKey = key;
-        _lastSampleValid = false;
-        _baseServerUtc = null;
-        _serverClock.Reset();
-        SetText(_peerAddress, _lastKnownServer);
-        SetText(_syncState, _configuredEnabled ? "Not synced"
-            : _serviceInstalled ? "NTP off" : "Not installed");
-        SetText(_peerHealth, _configuredEnabled ? "No data" : "Off");
-        SetText(_peerStratum, "—");
-        SetText(_peerOffset, "—");
-        SetText(_peerBroadcast, "—");
-        SetText(_peerClock, "—");
-        SetText(_connectionHint, message);
-        _connectionHint.IsVisible = true;
-        var stateColor = BrushResolver.Require(this,
-            _configuredEnabled ? "ArBrush.Warning" : "ArBrush.TextDim");
-        if (!ReferenceEquals(_syncLamp.Foreground, stateColor))
-            _syncLamp.Foreground = stateColor;
-        if (!ReferenceEquals(_peerHealth.Foreground, stateColor))
-            _peerHealth.Foreground = stateColor;
+        if (!_catalogReady || _editing) return;
+        string? ip = await new AddPeerDialog(this).ShowDialog<string?>(this);
+        if (!string.IsNullOrWhiteSpace(ip))
+            await ChangePeerAsync("add", ip);
+    }
+
+    private async void PeerToggle_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: PeerRowModel row })
+            await ChangePeerAsync(row.Enabled ? "disable" : "enable", row.Address);
+    }
+
+    private async void PeerDelete_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: PeerRowModel row } || _editing) return;
+        bool remove = await new RemovePeerDialog(this, row.Address)
+            .ShowDialog<bool>(this);
+        if (remove)
+            await ChangePeerAsync("delete", row.Address);
+    }
+
+    private void Refresh_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _lastJson = null;
+        _ = RefreshCatalogAsync();
+        _ = RefreshStatusAsync();
     }
 
     private void History_OnClick(object? sender, RoutedEventArgs e)
     {
-        _historyExpanded = !_historyExpanded;
-        _historyScroll.IsVisible = _historyExpanded;
-        _historyChevron.Data = Geometry.Parse(_historyExpanded ? ChevronUp : ChevronDown);
-        if (_historyExpanded)
-        {
-            _heightBeforeHistory = Height;
-            Height = Math.Max(Height, 550);
-        }
-        else if (_heightBeforeHistory > 0)
-        {
-            Height = _heightBeforeHistory;
-        }
+        _historyOpen = !_historyOpen;
+        _historyScroll.IsVisible = _historyOpen;
+        _chevron.Data = Geometry.Parse(_historyOpen ? ChevronUp : ChevronDown);
     }
-
-    private void RefreshServiceState()
-    {
-        try
-        {
-            using var service = Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\CurrentControlSet\Services\ARFastSNTP");
-            bool installed = service is not null;
-            int startMode = installed ? Convert.ToInt32(service!.GetValue("Start", 3)) : 4;
-            // StartMode is the service lifecycle, not the per-source switch.
-            bool serviceConfigured = installed && startMode != 4;
-            using var settings = Registry.LocalMachine.OpenSubKey(
-                SourceControlProtocol.SettingsKey);
-            bool enabled = serviceConfigured &&
-                (settings?.GetValue(SourceControlProtocol.SettingName) as int?) != 0;
-            ApplySourceState(installed, enabled);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
-            or System.Security.SecurityException)
-        {
-            _controlAvailable = false;
-            _sourceToggle.IsEnabled = false;
-        }
-    }
-
-    private void ApplySourceState(bool installed, bool enabled)
-    {
-        _sourceToggle.IsEnabled = installed && _controlAvailable && !_sourceActionPending;
-        if (_serviceStateKnown && installed == _serviceInstalled &&
-            enabled == _configuredEnabled)
-            return;
-
-        _serviceStateKnown = true;
-        _serviceInstalled = installed;
-        _configuredEnabled = enabled;
-        var green = BrushResolver.Require(this, "ArBrush.Success");
-        var gray = BrushResolver.Require(this, "ArBrush.TextDim");
-        _sourceTrack.Background = BrushResolver.Require(this,
-            enabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
-        _sourceThumb.HorizontalAlignment = enabled
-            ? Avalonia.Layout.HorizontalAlignment.Right
-            : Avalonia.Layout.HorizontalAlignment.Left;
-        _sourceThumb.Fill = BrushResolver.Require(this,
-            enabled ? "ArBrush.Canvas" : "ArBrush.Text");
-        _serverIcon.Fill = enabled ? green : gray;
-        ToolTip.SetTip(_serverIcon, enabled ? "NTP source enabled" : "NTP source off");
-        ToolTip.SetTip(_sourceToggle, !_controlAvailable
-            ? "Update the Windows Service to control NTP"
-            : enabled ? "Stop using this NTP source" : "Use this NTP source");
-
-        _lastSnapshot = null;
-        _lastUnavailableKey = null;
-        _lastFileChange.Reset();
-        if (!enabled)
-            ShowUnavailable(installed ? "NTP source off" : "Service not installed.");
-    }
-
-    private async Task CheckControlAsync()
-    {
-        if (_closed || _controlReading || _sourceActionPending) return;
-        _controlReading = true;
-        try
-        {
-            bool enabled = await SourceControlProtocol.SendAsync(
-                SourceControlProtocol.Query, _shutdown.Token);
-            if (_closed) return;
-            _controlAvailable = true;
-            ApplySourceState(_serviceInstalled, enabled);
-        }
-        catch (Exception ex) when (ex is IOException or TimeoutException
-            or UnauthorizedAccessException or InvalidDataException
-            or OperationCanceledException)
-        {
-            if (_closed) return;
-            _controlAvailable = false;
-            _sourceToggle.IsEnabled = false;
-            ToolTip.SetTip(_sourceToggle, "NTP control unavailable. Update or restart the service.");
-        }
-        finally
-        {
-            _controlReading = false;
-            if (!_closed)
-                _sourceToggle.IsEnabled = _serviceInstalled &&
-                    _controlAvailable && !_sourceActionPending;
-        }
-    }
-
-    private async void ToggleSource_OnClick(object? sender, RoutedEventArgs e)
-    {
-        if (_sourceActionPending || !_controlAvailable || !_serviceInstalled) return;
-        _sourceActionPending = true;
-        _sourceToggle.IsEnabled = false;
-        bool requested = !_configuredEnabled;
-        try
-        {
-            // Fixed two-byte command to the already-running Windows Service.
-            // No process launch, installer, SCM modification, UAC or SmartScreen.
-            bool acknowledged = await SourceControlProtocol.SendAsync(
-                requested ? SourceControlProtocol.Enable : SourceControlProtocol.Disable,
-                _shutdown.Token);
-            if (_closed) return;
-            ApplySourceState(_serviceInstalled, acknowledged);
-            _lastSnapshot = null;
-            _lastUnavailableKey = null;
-            if (!acknowledged)
-                ShowUnavailable("NTP source is off.");
-            _ = PollStatusAsync();
-        }
-        catch (Exception ex) when (ex is IOException or TimeoutException
-            or UnauthorizedAccessException or InvalidDataException)
-        {
-            if (!_closed)
-            {
-                SetText(_connectionHint, "Could not reach NTP service control.");
-                _connectionHint.IsVisible = true;
-                _ = CheckControlAsync();
-            }
-        }
-        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
-        finally
-        {
-            _sourceActionPending = false;
-            if (!_closed)
-            {
-                _sourceToggle.IsEnabled = _serviceInstalled && _controlAvailable;
-                _ = PollStatusAsync();
-            }
-        }
-    }
-
-    private void Refresh_OnClick(object? sender, RoutedEventArgs e) =>
-        _ = PollStatusAsync();
 }

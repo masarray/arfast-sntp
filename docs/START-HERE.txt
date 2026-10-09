@@ -1,21 +1,24 @@
-AR Fast SNTP — Windows setup v0.9.1 candidate
-===============================================
+AR Fast SNTP — Windows x64 installer (multi-server candidate)
+=============================================================
 
-1. Get the latest successful ARFastSNTP-Inno-Windows-x64 GitHub Actions artifact.
-2. Extract its ZIP; run ARFastSNTP-Setup-Windows-x64.exe.
-3. Enter your trusted NTP server IPv4, select Next and finish setup.
-4. Existing PowerShell/WinForms/Inno service configurations are recognized
-   by the same canonical ARFastSNTP Windows Service name.
-5. One service runs in the background. Closing Avalonia Studio does NOT stop it.
+1. Download the newest GREEN ARFastSNTP-Inno-Windows-x64 GitHub Actions artifact.
+2. Extract the ZIP; run ARFastSNTP-Setup-Windows-x64.exe.
+3. Clean install: enter your first NTP Server IP. Existing installs preserve
+   their saved NTP Server list automatically without asking for that IP again.
+4. Setup installs/updates only one canonical Windows Service, starts it,
+   and offers to open AR Fast SNTP Studio.
+5. In Studio use Add to enter another NTP Server IPv4. Each row has a Use
+   switch and a Delete icon. Changes are live; NO reinstall/restart/UAC is
+   required for source changes.
+6. The small PC Time / Sync Status strip is for orientation. Server status,
+   stratum, offset and time are in the main NTP Explorer.
+7. Expand Status History to inspect time corrections or failures.
 
-Studio main view: PC Time, PC Sync Status, NTP Server table, collapsed History.
-No duplicate Install button; NTP era reference year is an advanced installer
-argument rather than a normal setup field.
+A green server icon means enabled. Only a validated, elected NTP source
+may correct the PC clock; two conflicting live servers freeze correction.
+Broadcast = not measured until a dedicated listener is implemented.
 
-On an installation failure, see
-C:\ProgramData\ARFastSNTP\setup.log
-and preserve the installer-recovery folder if present.
-
-Only approved isolated test PCs may use system-clock stepping.
-Do not remove or overwrite another vendor's service to make setup succeed.
-The current worker supports one NTP source; multi-peer is a future milestone.
+Safety: isolated authorized Windows lab PC ONLY; not a live SCADA/SOE host.
+This candidate still requires real GPS/NTP failover acceptance testing.
+Installer logs: C:\ProgramData\ARFastSNTP\setup.log
+Architecture: docs/MULTI-NTP-ARCHITECTURE.md (repository).

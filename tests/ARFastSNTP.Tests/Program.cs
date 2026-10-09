@@ -282,5 +282,108 @@ Check("status SourceEnabled preserves backwards compatible default",
         "192.16.1.175", "Disabled", null, null, null, null)
     { SourceEnabled = false }).Contains("\"SourceEnabled\":false", StringComparison.Ordinal));
 
+// Deterministic NTP source selection and persisted live configuration.
+var c1 = new PeerElection.Candidate("192.16.1.175", 2, 8, 1);
+var c2 = new PeerElection.Candidate("192.16.1.176", 4, 12, 2);
+var bad = new PeerElection.Candidate("192.16.1.177", 8000, 1, 1);
+Check("one trusted server needs repeated verification",
+    PeerElection.Choose(new[] {c1}, null, false).Selected is null &&
+    PeerElection.Choose(new[] {c1}, null, true).Selected == c1.Address);
+Check("two agreeing NTP servers elect lowest RTT",
+    PeerElection.Choose(new[] {c1,c2}, null, false).Selected == c1.Address);
+Check("previous valid NTP source retained (hysteresis)",
+    PeerElection.Choose(new[] {c1,c2}, c2.Address, false).Selected == c2.Address);
+Check("two disagreeing sources never step",
+    PeerElection.Choose(new[] {c1,bad}, null, true).Selected is null);
+var majority = PeerElection.Choose(new[] {c1,c2,bad}, null, false);
+Check("three sources exclude outlier even if lower RTT",
+    majority.Selected == c1.Address && majority.Agreeing == 2);
+var chainA = new PeerElection.Candidate("192.16.1.180", 0, 5, 1);
+var chainB = new PeerElection.Candidate("192.16.1.181", 200, 5, 1);
+var chainC = new PeerElection.Candidate("192.16.1.182", 400, 5, 1);
+Check("consensus is a bounded interval, not a chained 400ms span",
+    PeerElection.Choose(new[] { chainA, chainB, chainC }, null, false).Agreeing == 2);
+Check("no valid sources means no clock selection",
+    PeerElection.Choose(new[] {bad with { RttMilliseconds = 999 }}, null, true).Selected is null);
+Check("NTP addresses use canonical unicast IPv4 only",
+    PeerCatalog.TryNormalize("192.016.1.175", out _) == false &&
+    PeerCatalog.TryNormalize("192.16.1.175", out var cleanIp) &&
+    cleanIp == "192.16.1.175" &&
+    !PeerCatalog.TryNormalize("224.0.0.1", out _) &&
+    PeerCatalog.TryNormalize("127.0.0.1", out _));
+
+string peerPath = Path.Combine(Path.GetTempPath(),
+    "arfastsntp-tests-" + Guid.NewGuid().ToString("N"), "peers.json");
+try
+{
+    int writes = 0;
+    using (var master = new SourceControlState(true, _ => writes++))
+    using (var peers = PeerCatalog.Load(peerPath,
+        System.Net.IPAddress.Parse("192.16.1.175"), master))
+    {
+        Check("legacy one-IP configuration migrated without installer",
+            peers.Snapshot().Peers is [{ Address: "192.16.1.175", Enabled: true }]);
+        var added = peers.Mutate("add", "192.16.1.176");
+        Check("adding server modifies live list without SCM restart",
+            added.Length == 2 && added[1].Enabled);
+        bool duplicateRefused = false;
+        try { peers.Mutate("add", "192.16.1.176"); }
+        catch (InvalidOperationException) { duplicateRefused = true; }
+        Check("duplicate IP refused", duplicateRefused);
+        var beforeDisable = peers.Snapshot().Generation;
+        peers.Mutate("disable", "192.16.1.175");
+        Check("disabled source immediately invalidates prior election",
+            !peers.IsCurrent("192.16.1.175", beforeDisable));
+        peers.Mutate("disable", "192.16.1.176");
+        Check("all OFF prevents any Windows clock step",
+            !master.Enabled &&
+            !peers.TryStep("192.16.1.175", peers.Snapshot().Generation, testUtc, out _));
+        peers.Mutate("enable", "192.16.1.176");
+        Check("one server ON wakes canonical worker", master.Enabled &&
+            peers.Snapshot().Peers.Count(p => p.Enabled) == 1);
+        peers.Mutate("delete", "192.16.1.175");
+        Check("deleting a server removes it without service uninstall",
+            peers.Snapshot().Peers is [{ Address: "192.16.1.176", Enabled: true }]);
+        Check("peer catalog signals changes with bounded coalescing",
+            await peers.WaitAsync(TimeSpan.Zero, CancellationToken.None) &&
+            !await peers.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+    }
+    using var master2 = new SourceControlState(true, _ => { });
+    using var restored = PeerCatalog.Load(peerPath,
+        System.Net.IPAddress.Parse("192.16.1.175"), master2);
+    Check("NTP server list survives worker restart",
+        restored.Snapshot().Peers is [{ Address: "192.16.1.176", Enabled: true }]);
+}
+finally
+{
+    Directory.Delete(Path.GetDirectoryName(peerPath)!, recursive: true);
+}
+Check("peer control accepts only constrained operations",
+    PeerControlProtocol.IsAction("add") &&
+    PeerControlProtocol.IsAction("delete") &&
+    PeerControlProtocol.IsAction("enable") &&
+    !PeerControlProtocol.IsAction("restart-service") &&
+    !PeerControlProtocol.IsAction("set-clock"));
+using (var stream = new MemoryStream(PeerControlProtocol.Encode(
+    new PeerControlProtocol.Request("add", "192.16.1.176"))))
+{
+    var request = await PeerControlProtocol.ReadAsync<PeerControlProtocol.Request>(
+        stream, CancellationToken.None);
+    Check("bounded local IPC round-trip",
+        request.Action == "add" && request.Address == "192.16.1.176");
+}
+var snapshotMulti = new StatusSnapshot(testUtc, "192.16.1.175",
+    "Synchronized", 2.0, 8, testUtc.AddMilliseconds(2), null)
+{
+    SelectedServer = "192.16.1.175",
+    Peers = new[] { new PeerReading("192.16.1.175", true, "Online",
+        2.0, 8, 1, testUtc, null, true, 4) }
+};
+Check("per-peer multi status parses in Studio and legacy dashboard",
+    ARFastSNTP.Dashboard.DashboardStatus.TryParse(
+        StatusSnapshot.Serialize(snapshotMulti), out var ui, out _) &&
+    ui is not null && ui.Peers.Length == 1 &&
+    ui.Peers[0].Selected && ui.SelectedServer == "192.16.1.175");
+
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
