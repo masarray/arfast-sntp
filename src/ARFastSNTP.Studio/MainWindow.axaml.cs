@@ -27,7 +27,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _syncState;
     private readonly TextBlock _syncDetail;
     private readonly TextBlock _peerAddress;
-    private readonly Avalonia.Controls.Shapes.Path _switchIcon;
+    private readonly Border _sourceTrack;
+    private readonly Avalonia.Controls.Shapes.Ellipse _sourceThumb;
     private readonly Button _sourceToggle;
     private readonly TextBlock _peerHealth;
     private readonly TextBlock _peerStratum;
@@ -57,13 +58,10 @@ public sealed partial class MainWindow : Window
     private bool _closed;
     private bool _historyExpanded;
     private int _ticks;
+    private double _heightBeforeHistory;
     private bool _configuredEnabled;
     private bool _serviceInstalled;
     private bool _sourceActionPending;
-    private static readonly string SwitchOn =
-        "M280-240q-100 0-170-70T40-480q0-100 70-170t170-70h400q100 0 170 70t70 170t-170 70H280Zm0-80h400q66 0 113-47t47-113q0-66-47-113t-113-47H280q-66 0-113 47t-47 113q0 66 47 113t113 47Zm485-75q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-285-85Z";
-    private static readonly string SwitchOff =
-        "M280-240q-100 0-170-70T40-480q0-100 70-170t170-70h400q100 0 170 70t70 170q0 100-70 170t-170 70H280Zm0-80h400q66 0 113-47t47-113q0-66-47-113t-113-47H280q-66 0-113 47t-47 113q0 66 47 113t113 47Zm85-75q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm115-85Z";
     private static readonly string ChevronDown =
         "m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
     private static readonly string ChevronUp =
@@ -80,7 +78,8 @@ public sealed partial class MainWindow : Window
         _syncState = Required<TextBlock>("SyncState");
         _syncDetail = Required<TextBlock>("SyncDetail");
         _peerAddress = Required<TextBlock>("PeerAddress");
-        _switchIcon = Required<Avalonia.Controls.Shapes.Path>("SwitchIcon");
+        _sourceTrack = Required<Border>("SourceTrack");
+        _sourceThumb = Required<Avalonia.Controls.Shapes.Ellipse>("SourceThumb");
         _sourceToggle = Required<Button>("SourceToggle");
         _peerHealth = Required<TextBlock>("PeerHealth");
         _peerStratum = Required<TextBlock>("PeerStratum");
@@ -130,16 +129,21 @@ public sealed partial class MainWindow : Window
 
     private void RefreshClock()
     {
-        DateTimeOffset pcUtc = DateTimeOffset.UtcNow;
-        _pcClock.Text = pcUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        _pcDate.Text = pcUtc.ToString("ddd, dd MMM yyyy", CultureInfo.InvariantCulture);
+        // Display what the operator sees in Windows Settings. All SNTP math
+        // remains UTC, and the timezone is a visual-only conversion.
+        DateTimeOffset pcLocal = DateTimeOffset.Now;
+        _pcClock.Text = pcLocal.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        _pcDate.Text = pcLocal.ToString("ddd, dd MMM yyyy", CultureInfo.InvariantCulture) +
+            "  ·  UTC" + pcLocal.ToString("zzz", CultureInfo.InvariantCulture);
         if (_lastSampleValid && _baseServerUtc is DateTimeOffset reference &&
             _lastFileChange.Elapsed <= TimeSpan.FromSeconds(12))
         {
             DateTimeOffset estimate = reference + _serverClock.Elapsed;
-            _peerClock.Text = estimate.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-            ToolTip.SetTip(_peerClock, estimate.ToString("ddd, dd MMM yyyy HH:mm:ss 'UTC'",
-                CultureInfo.InvariantCulture));
+            var local = estimate.ToLocalTime();
+            _peerClock.Text = local.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            ToolTip.SetTip(_peerClock,
+                local.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", CultureInfo.InvariantCulture) +
+                "  ·  UTC " + estimate.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
         }
         else
             _peerClock.Text = "—";
@@ -194,38 +198,26 @@ public sealed partial class MainWindow : Window
             // subtraction to pronounce a fresh snapshot offline.
             _lastKnownServer = snap.Server;
             _peerAddress.Text = snap.Server;
-            bool valid = snap.OffsetMilliseconds is not null &&
-                snap.EstimatedServerUtc is not null;
-            bool synced = valid && snap.State == "Synchronized";
-            _lastSampleValid = valid;
+            var view = StudioStatusPresenter.Create(snap);
+            _lastSampleValid = view.ValidReply;
 
-            _globalLamp.Foreground = BrushResolver.Require(this,
-                valid ? "ArBrush.Success" : "ArBrush.Warning");
-            _globalStatus.Text = valid ? "Connected" : "No reply";
             _syncLamp.Foreground = BrushResolver.Require(this,
-                synced ? "ArBrush.Success" : "ArBrush.Warning");
-            _syncState.Text = synced ? "Synced" : valid ? "Offset" : "No reply";
-            _syncDetail.Text = synced || valid && snap.OffsetMilliseconds is double
-                ? $"{snap.Server}  ·  {FormatOffset(snap.OffsetMilliseconds!.Value)}"
-                : "Waiting for NTP response";
-            _peerHealth.Text = valid ? "● Online" : "● No reply";
+                view.Synchronized ? "ArBrush.Success" : "ArBrush.Warning");
+            _syncState.Text = view.PcSync;
+            _syncDetail.Text = view.PcDetail;
+            _peerHealth.Text = view.ServerHealth;
             _peerHealth.Foreground = BrushResolver.Require(this,
-                valid ? "ArBrush.Success" : "ArBrush.Warning");
-            _peerStratum.Text = valid && snap.Stratum.HasValue
-                ? snap.Stratum.Value.ToString(CultureInfo.InvariantCulture) : "—";
-            _peerOffset.Text = valid && snap.OffsetMilliseconds is double offset
-                ? FormatOffset(offset) : "—";
+                view.ValidReply ? "ArBrush.Success" : "ArBrush.Warning");
+            _peerStratum.Text = view.Stratum;
+            _peerOffset.Text = view.ServerOffset;
             _peerBroadcast.Text = "—";
-            _connectionHint.Text = valid
-                ? $"Valid {snap.AcceptedCount} / {snap.RequestCount}  ·  RTT {snap.RoundTripMilliseconds:0.0} ms"
-                : $"No reply  ·  {snap.State}";
-            _lastReply.Text = valid
-                ? "Last " + snap.UpdatedUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture)
-                : "—";
+            _connectionHint.Text = view.Footer;
+            _lastReply.Text = "Updated " +
+                snap.UpdatedUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
             _baseServerUtc = null;
             _serverClock.Reset();
-            if (valid && snap.EstimatedServerUtc is DateTimeOffset server)
+            if (view.ValidReply && snap.EstimatedServerUtc is DateTimeOffset server)
             {
                 // Drift since snapshot uses wall-time only for small differences.
                 double age = (DateTimeOffset.UtcNow - snap.UpdatedUtc).TotalSeconds;
@@ -294,13 +286,11 @@ public sealed partial class MainWindow : Window
         _baseServerUtc = null;
         _serverClock.Reset();
         _peerAddress.Text = _lastKnownServer;
-        _globalLamp.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
-        _globalStatus.Text = _configuredEnabled ? "No reply" : "Disabled";
         _syncLamp.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
         _syncState.Text = _configuredEnabled ? "Not synced"
-            : _serviceInstalled ? "Disabled" : "Not installed";
+            : _serviceInstalled ? "NTP off" : "Not installed";
         _syncDetail.Text = message;
-        _peerHealth.Text = "● Offline";
+        _peerHealth.Text = _configuredEnabled ? "No data" : "Off";
         _peerHealth.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
         _peerStratum.Text = "—";
         _peerOffset.Text = "—";
@@ -310,21 +300,20 @@ public sealed partial class MainWindow : Window
         _lastReply.Text = "—";
     }
 
-    private static string FormatOffset(double value)
-    {
-        if (Math.Abs(value) >= TimeSpan.FromDays(365).TotalMilliseconds)
-        {
-            double years = value / TimeSpan.FromDays(365.2425).TotalMilliseconds;
-            return years.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " y";
-        }
-        return value.ToString("+0.000;-0.000;0.000", CultureInfo.InvariantCulture) + " ms";
-    }
-
     private void History_OnClick(object? sender, RoutedEventArgs e)
     {
         _historyExpanded = !_historyExpanded;
         _historyScroll.IsVisible = _historyExpanded;
         _historyChevron.Data = Geometry.Parse(_historyExpanded ? ChevronUp : ChevronDown);
+        if (_historyExpanded)
+        {
+            _heightBeforeHistory = Height;
+            Height = Math.Max(Height, 550);
+        }
+        else if (_heightBeforeHistory > 0)
+        {
+            Height = _heightBeforeHistory;
+        }
     }
 
     private void RefreshServiceState()
@@ -338,18 +327,27 @@ public sealed partial class MainWindow : Window
             int startMode = exists ? Convert.ToInt32(key!.GetValue("Start", 3)) : 4;
             _configuredEnabled = exists && startMode != 4;
             _sourceToggle.IsEnabled = exists && !_sourceActionPending;
-            _switchIcon.Data = Geometry.Parse(_configuredEnabled ? SwitchOn : SwitchOff);
-            _switchIcon.Fill = BrushResolver.Require(this,
-                _configuredEnabled ? "ArBrush.Success" : "ArBrush.TextDim");
+            _sourceTrack.Background = BrushResolver.Require(this,
+                _configuredEnabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
+            _sourceThumb.HorizontalAlignment = _configuredEnabled
+                ? Avalonia.Layout.HorizontalAlignment.Right
+                : Avalonia.Layout.HorizontalAlignment.Left;
+            _sourceThumb.Fill = BrushResolver.Require(this,
+                _configuredEnabled ? "ArBrush.Canvas" : "ArBrush.Text");
             ToolTip.SetTip(_sourceToggle, exists
                 ? _configuredEnabled ? "Disable NTP source" : "Enable NTP source"
                 : "Install the NTP service first");
-            if (!_configuredEnabled && exists && !_sourceActionPending)
+            _globalLamp.Foreground = BrushResolver.Require(this,
+                _configuredEnabled ? "ArBrush.Success" : "ArBrush.TextDim");
+            _globalStatus.Text = exists
+                ? _configuredEnabled ? "NTP enabled" : "NTP off"
+                : "Service not installed";
+            if (!_configuredEnabled && !_sourceActionPending)
             {
-                _globalStatus.Text = "Disabled";
-                _syncState.Text = "Disabled";
-                _syncDetail.Text = "NTP is turned off";
-                _peerHealth.Text = "● Disabled";
+                _syncState.Text = exists ? "NTP off" : "Not installed";
+                _syncDetail.Text = exists ? "Enable NTP to receive time"
+                    : "Install AR Fast SNTP to begin";
+                _peerHealth.Text = "Off";
             }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException

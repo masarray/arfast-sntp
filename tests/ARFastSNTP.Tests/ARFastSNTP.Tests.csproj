@@ -11,5 +11,7 @@
     <!-- Compile the UI's dependency-free status reader in the regression harness.
          No WinForms display or window session required. -->
     <Compile Include="../../src/ARFastSNTP.Dashboard/DashboardStatus.cs" Link="DashboardStatus.cs" />
+    <!-- Pure read-only Studio presenter: test status semantics without launching Avalonia. -->
+    <Compile Include="../../src/ARFastSNTP.Studio/StudioStatusPresenter.cs" Link="StudioStatusPresenter.cs" />
   </ItemGroup>
 </Project>

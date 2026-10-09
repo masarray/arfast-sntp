@@ -16,9 +16,12 @@ command, startup mode, and running state for rollback. It never adopts an
 unrecognized service. Legacy desktop shortcuts are cleaned only when their
 targets are verified.
 
-**Studio** now uses a premium, low-border graphite layout: PC UTC/date,
-synchronization state, one measured server row with offset/stratum/server
-time, and a collapsible history with Material circle-chevron icons. The
+**Studio** now uses a compact, low-border graphite layout: PC **local** time
+and date (matching Windows), independently verified synchronization state,
+one measured server row with offset/stratum/**local** server time, and
+collapsible history with Material circle-chevron icons. NTP calculations
+remain UTC internally. Source status only says *NTP enabled* when service
+startup is enabled; that alone is **not** proof of a valid NTP reply. The
 server and switch icons follow Material vector paths provided in the
 design review. The **Use** switch genuinely starts or stops the currently
 configured single-source Windows Service with one Administrator approval;
@@ -51,3 +54,17 @@ and Inno compilation. Real Windows service upgrades and DPI acceptance require
 field testing; green CI alone is not production acceptance. Source from the
 existing WinForms dashboard remains buildable as a fallback but is not bundled
 into the primary Inno installer.
+
+## Compact monitor acceptance
+
+A single-source window must be content-sized, not stretch one row into a
+mostly empty table. The top bar describes service configuration, while the
+PC Sync summary describes only verified time status. The NTP table provides
+source health and a readable offset. Its footer gives a helpful explanation
+and accepted/total reply counts, without repeating "No reply" everywhere.
+A real switch toggles the installed source via the elevated service helper;
+the icon reflects the confirmed service state, not a speculative click.
+
+The pure `StudioStatusPresenter` is included in the .NET regression suite,
+which covers verified sync, timeout guidance, large drift, and rejecting a
+false sync when the timestamp is absent. No new CI lane is required.

@@ -91,9 +91,15 @@ jobs:
           if (-not $xaml.Contains('HistoryScroll') -or
               -not $xaml.Contains('PeerBroadcast') -or
               -not $xaml.Contains('PcClock') -or
-              -not $xaml.Contains('SwitchIcon') -or
-              -not $xaml.Contains('ToggleSource_OnClick')) {
-            throw 'Compact NTP monitor lost real source switch or required components'
+              -not $xaml.Contains('SourceTrack') -or
+              -not $xaml.Contains('SourceThumb') -or
+              -not $xaml.Contains('ToggleSource_OnClick') -or
+              -not $xaml.Contains('PC TIME  ·  LOCAL')) {
+            throw 'Compact NTP monitor lost real switch, local clock or required components'
+          }
+          if ($xaml.Contains('RowDefinitions="31,34,56,*,Auto"') -or
+              $xaml.Contains('x:Name="SwitchIcon"')) {
+            throw 'Old placeholder-heavy layout returned'
           }
           $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
           if (-not $wizard.Contains('Enter NTP Server IP Address') -or
