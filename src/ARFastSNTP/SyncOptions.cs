@@ -7,7 +7,7 @@ internal sealed record SyncOptions(IPAddress Server, bool AllowStep, int ServerY
 {
     internal const string Usage =
         "ARFastSNTP --server <IPv4> [--server-year 2026] [--status-file <path>] " +
-        "[--certification-mode --allow-step]\n" +
+        "[--certification-mode --allow-step] [--check-config]\n" +
         "MONITOR ONLY by default. Clock stepping requires both certification flags.";
 
     internal static SyncOptions Parse(string[] args)

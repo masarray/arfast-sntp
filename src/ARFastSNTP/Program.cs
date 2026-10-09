@@ -8,10 +8,12 @@ if (args.Contains("--help", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+bool checkOnly = args.Contains("--check-config", StringComparer.OrdinalIgnoreCase);
+string[] workerArgs = args.Where(argument => argument != "--check-config").ToArray();
 SyncOptions options;
 try
 {
-    options = SyncOptions.Parse(args);
+    options = SyncOptions.Parse(workerArgs);
 }
 catch (ArgumentException ex)
 {
@@ -21,7 +23,14 @@ catch (ArgumentException ex)
     return;
 }
 
-await Host.CreateDefaultBuilder(args)
+if (checkOnly)
+{
+    Console.WriteLine($"Configuration valid: server={options.Server}, year={options.ServerYear}, " +
+        $"mode={(options.AllowStep ? "CERTIFICATION STEP" : "MONITOR ONLY")}");
+    return; // Smoke-check only; no network access or Windows time changes.
+}
+
+await Host.CreateDefaultBuilder()
     .UseWindowsService(service => service.ServiceName = "AR Fast SNTP")
     .ConfigureServices((_, services) =>
         services.AddHostedService(provider =>

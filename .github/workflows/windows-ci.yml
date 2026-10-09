@@ -26,6 +26,8 @@ jobs:
           dotnet build src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release --warnaserror
       - name: Deterministic SNTP regression tests
         run: dotnet run --project tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --no-build
+      - name: Validate service arguments without time or network access
+        run: dotnet run --project src/ARFastSNTP/ARFastSNTP.csproj -c Release --no-build -- --server 192.16.1.175 --server-year 2026 --certification-mode --allow-step --check-config
       - name: Publish worker and dashboard (x64)
         run: |
           dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/worker

@@ -167,6 +167,10 @@ internal sealed class DashboardForm : Form
                 $"Rejected {root.GetProperty("RejectedCount").GetInt64()}   |   Offset {offset}";
             string? evt = root.GetProperty("LastEvent").ValueKind == JsonValueKind.String
                 ? root.GetProperty("LastEvent").GetString() : null;
+            if (string.IsNullOrWhiteSpace(evt) &&
+                root.TryGetProperty("RecentCorrections", out var history) &&
+                history.ValueKind == JsonValueKind.Array && history.GetArrayLength() > 0)
+                evt = history[history.GetArrayLength() - 1].GetString();
             if (!string.IsNullOrWhiteSpace(evt)) _lastEvent.Text = "Event: " + evt;
 
             if (valid && root.GetProperty("EstimatedServerUtc").ValueKind == JsonValueKind.String)
