@@ -48,25 +48,6 @@ internal static class Program
             return;
         }
 
-        // Studio source switch: real SCM enable/disable, never a decorative toggle.
-        // Runs headlessly under one Windows UAC approval when a user clicks it.
-        if (args.Length == 1 &&
-            (args[0] == "--source-enable" || args[0] == "--source-disable"))
-        {
-            try
-            {
-                SourceServiceControl.SetEnabled(args[0] == "--source-enable",
-                    InstallerOperations.PersistLog);
-                Environment.ExitCode = 0;
-            }
-            catch (Exception ex)
-            {
-                InstallerOperations.PersistLog("NTP source switch failed: " + ex);
-                Environment.ExitCode = 5;
-            }
-            return;
-        }
-
         // Does not launch a window, require elevation, register services, or use the network.
         if (args.Length == 1 && args[0] == "--self-test")
         {

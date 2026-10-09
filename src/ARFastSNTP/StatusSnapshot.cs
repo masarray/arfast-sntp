@@ -18,6 +18,7 @@ internal sealed record StatusSnapshot(
     public byte? Stratum { get; init; }
     public DateTimeOffset? LastCorrectionUtc { get; init; }
     public bool StepEnabled { get; init; }
+    public bool SourceEnabled { get; init; } = true;
     public string Broadcast { get; init; } = "Not measured";
     public string[] RecentCorrections { get; init; } = Array.Empty<string>();
     internal static string Serialize(StatusSnapshot value) => JsonSerializer.Serialize(value);

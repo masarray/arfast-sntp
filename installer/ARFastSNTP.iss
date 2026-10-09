@@ -2,7 +2,7 @@
 [Setup]
 AppId={{A9AEFEC9-42AE-4BDC-A69C-F2053D0D97A0}
 AppName=AR Fast SNTP
-AppVersion=0.9.2
+AppVersion=0.9.3
 DefaultDirName={autopf}\ARFastSNTP
 UsePreviousAppDir=no
 DisableDirPage=yes
@@ -30,6 +30,11 @@ Source: "{#Payload}\ARFastSNTP.Setup.exe"; Flags: dontcopy
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\DESIGN-TOKEN-PROVENANCE.md"; DestDir: "{app}\licenses"; Flags: ignoreversion
+
+[Registry]
+; Service-owned ON/OFF preference persists across upgrades and reboots,
+; but is removed on an explicit full uninstall.
+Root: HKLM; Subkey: "SOFTWARE\ARFastSNTP"; Flags: uninsdeletekey
 
 [Icons]
 Name: "{autoprograms}\AR Fast SNTP"; Filename: "{app}\studio\ARFastSNTP.Studio.exe"

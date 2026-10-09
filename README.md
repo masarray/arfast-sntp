@@ -5,7 +5,7 @@
 Use the latest successful GitHub Actions artifact `ARFastSNTP-Inno-Windows-x64`.
 Extract the artifact ZIP and launch `ARFastSNTP-Setup-Windows-x64.exe`.
 
-The v0.9.2 Inno wizard simply says **Enter NTP Server IP Address**, upgrades an existing
+The v0.9.3 Inno wizard simply says **Enter NTP Server IP Address**, upgrades an existing
 ARFastSNTP service in place, starts it, and opens Studio. The Windows Service
 continues running when Studio closes. The reference year is retained from
 existing configuration and is hidden from the normal setup flow.
@@ -23,10 +23,11 @@ collapsible history with Material circle-chevron icons. NTP calculations
 remain UTC internally. Source status only says *NTP enabled* when service
 startup is enabled; that alone is **not** proof of a valid NTP reply. The
 server and switch icons follow Material vector paths provided in the
-design review. The **Use** switch genuinely starts or stops the currently
-configured single-source Windows Service with one Administrator approval;
-it is not a decorative toggle. The service stays running if Studio closes
-while the switch is enabled.
+design review. The **Use** switch now pauses/resumes only the configured NTP source,
+without stopping the Windows Service. It sends a tiny, fixed-format command
+over a local Windows named pipe to the worker; there is **no second UAC
+approval, service reinstall, or helper executable** for each click. The
+service remains running when Studio closes, including while NTP is OFF.
 The monitor no longer contains installer actions or a year field.
 
 The current worker uses a **single peer**. Add/Delete and independent
@@ -67,10 +68,14 @@ repainted in the always-visible monitor. Status History remains the place
 for diagnostic events.
 
 The 34×19 DIP switch is deliberately smaller than its 40×30 DIP click target.
+The PC Time/Sync summary is now 66 DIP high; the NTP Explorer is the primary
+visual area with consistent 9/10/14 DIP spacing.
 The adjacent Material time-server icon becomes green when the NTP source
 is enabled, gray when disabled. This is NOT a claim the remote NTP server
 is reachable: the independent Status column determines that. The source
-switch uses an elevated service helper; the UI never changes system time.
+switch uses a protected, local-only pipe handled by the existing Windows
+Service; Studio never changes system time or modifies service startup mode.
+ON/OFF survives reboot in a service-owned HKLM registry setting.
 A 1 Hz coalesced status reader updates unchanged labels zero times, and a
 monotonic estimated server clock is only rebased on actual discontinuities.
 Stale status still triggers future polls so the app recovers when service
@@ -79,3 +84,32 @@ replies resume.
 The pure `StudioStatusPresenter` is included in the .NET regression suite,
 which covers verified sync, timeout guidance, large drift, and rejecting a
 false sync when the timestamp is absent. No new CI lane is required.
+
+## Source pause/resume (single trusted NTP peer)
+
+- The installer still requires a **one-time Windows Administrator approval**.
+  The existing worker then runs as the canonical Windows Service.
+- A source **OFF** command is acknowledged after the worker has persisted it
+  and established a synchronized barrier against further SetSystemTime calls.
+  The worker does not poll UDP/123 while disabled; the service stays RUNNING.
+- Source **ON** wakes the same worker without stopping/starting SCM. It
+  discards pre-toggle burst validity and waits for newly verified NTP samples
+  before attempting a clock correction.
+- The 2-byte protocol accepts only OFF, ON, or QUERY and replies with a
+  bounded 3-byte acknowledgment; no server IP, arbitrary path, command line,
+  or executable can be supplied. The pipe's protected DACL permits LocalSystem,
+  Administrators and local interactive sessions; non-interactive network logins
+  do not receive a blanket Allow rule. Installation is restricted to an
+  authorized isolated lab machine, where locally logged-in operators may
+  deliberately pause/resume the pre-approved source.
+- The flag is stored under a protected HKLM setting, not in a file writable
+  by ordinary users. Disabling source never changes Windows Service startup
+  type; service health and source preference remain separate concepts.
+- On an older worker with no control pipe, Studio disables the switch and
+  asks for an upgrade instead of launching an elevated Setup executable.
+
+**Windows Defender SmartScreen / UAC:** removing the child process launch
+eliminates the repeated elevation workflow when toggling a source. The
+downloaded, currently unsigned installer may still display a SmartScreen
+reputation warning when first launched. Production distribution should use
+consistent Authenticode signing; no attempt to disable/bypass SmartScreen.

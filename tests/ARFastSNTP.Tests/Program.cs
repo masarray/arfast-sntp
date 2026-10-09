@@ -224,5 +224,63 @@ var driftView = ARFastSNTP.Studio.StudioStatusPresenter.Create(drifting);
 Check("Studio formats large offset readably",
     !driftView.Synchronized && driftView.ServerOffset.Contains("min",
         StringComparison.Ordinal));
+// ON/OFF is a source-use flag, NOT an SCM install/stop/restart command.
+// The privileged worker owns the toggle and persists it under HKLM.
+Check("control protocol allows only fixed ON/OFF/QUERY commands",
+    SourceControlProtocol.IsCommand(SourceControlProtocol.Disable) &&
+    SourceControlProtocol.IsCommand(SourceControlProtocol.Enable) &&
+    SourceControlProtocol.IsCommand(SourceControlProtocol.Query) &&
+    !SourceControlProtocol.IsCommand(3));
+Check("invalid control message version and length rejected",
+    !SourceControlProtocol.TryDecode(new byte[] { 2, 1 }, out _) &&
+    !SourceControlProtocol.TryDecode(new byte[] { 1, 1, 0 }, out _) &&
+    !SourceControlProtocol.TryDecode(new byte[] { 1, 100 }, out _));
+Check("valid control message decoded",
+    SourceControlProtocol.TryDecode(new byte[] { 1, SourceControlProtocol.Disable },
+        out var decodedControl) && decodedControl == SourceControlProtocol.Disable);
+Check("control ACK contains verified enabled state",
+    SourceControlProtocol.TryDecodeReply(
+        SourceControlProtocol.Reply(enabled: false), out var sourceOff) && !sourceOff &&
+    !SourceControlProtocol.TryDecodeReply(
+        SourceControlProtocol.Reply(enabled: true, ok: false), out _));
+int stateWrites = 0;
+bool persistedState = true;
+using (var controller = new SourceControlState(true, enabled =>
+{
+    persistedState = enabled;
+    stateWrites++;
+}))
+{
+    Check("worker source starts enabled", controller.Enabled);
+    Check("OFF persists state without service shutdown",
+        !controller.SetEnabled(false) && !controller.Enabled &&
+        !persistedState && stateWrites == 1);
+    Check("OFF prevents any Windows time correction",
+        !controller.TrySetTime(testUtc, out _));
+    Check("source state wake-up is single/coalesced",
+        await controller.WaitAsync(TimeSpan.Zero, CancellationToken.None) &&
+        !await controller.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+    Check("repeated OFF does not write registry or wake worker",
+        !controller.SetEnabled(false) && stateWrites == 1 &&
+        !await controller.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+    Check("ON resumes worker without SCM action",
+        controller.SetEnabled(true) && controller.Enabled &&
+        persistedState && stateWrites == 2 &&
+        await controller.WaitAsync(TimeSpan.Zero, CancellationToken.None));
+}
+var pausedSnapshot = unreachable with
+{
+    State = "Disabled", SourceEnabled = false, LastEvent = "NTP source paused."
+};
+var paused = ARFastSNTP.Studio.StudioStatusPresenter.Create(pausedSnapshot);
+Check("paused source is OFF, not falsely shown as No reply",
+    paused.PcSync == "NTP off" && paused.ServerHealth == "Off" &&
+    !paused.ValidReply && paused.Footer.Length == 0);
+Check("status SourceEnabled preserves backwards compatible default",
+    legacy is not null && legacy.SourceEnabled &&
+    StatusSnapshot.Serialize(new StatusSnapshot(testUtc,
+        "192.16.1.175", "Disabled", null, null, null, null)
+    { SourceEnabled = false }).Contains("\"SourceEnabled\":false", StringComparison.Ordinal));
+
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

@@ -3,47 +3,12 @@ using System.Text.Json;
 namespace ARFastSNTP.Setup;
 
 /// <summary>
-/// Small, explicit service actions for the one configured Windows NTP source.
-/// This is not a multi-peer API: all actions are scoped to the canonical
-/// ARFastSNTP-owned Windows Service and require Administrator approval.
+/// Bounded install-time verification of the running NTP service.
+/// Runtime source ON/OFF is exclusively handled inside the worker over its
+/// restricted local named pipe; it must never change SCM startup mode.
 /// </summary>
 internal static class SourceServiceControl
 {
-    internal static void SetEnabled(bool enabled, Action<string> report)
-    {
-        if (!InstallerOperations.IsAdministrator())
-            throw new UnauthorizedAccessException("Administrator permission is required.");
-        string? image = InstallerOperations.ExistingServiceImage();
-        if (image is null || !InstallerOperations.IsOwnedImage(image))
-            throw new InvalidOperationException("ARFastSNTP service was not found or is not owned.");
-        if (enabled)
-        {
-            InstallerOperations.RunSc(new[] { "config", InstallerOperations.ServiceName,
-                "start=", "auto" }, true, report);
-            if (!InstallerOperations.IsServiceRunning())
-            {
-                InstallerOperations.RunSc(new[] { "start", InstallerOperations.ServiceName },
-                    true, report);
-                if (!InstallerOperations.WaitForState(4))
-                    throw new TimeoutException("Service did not start.");
-            }
-            report("NTP source enabled; waiting for verified server reply.");
-        }
-        else
-        {
-            if (InstallerOperations.IsServiceRunning())
-            {
-                InstallerOperations.RunSc(new[] { "stop", InstallerOperations.ServiceName },
-                    true, report);
-                if (!InstallerOperations.WaitForState(1))
-                    throw new TimeoutException("Service did not stop; source remains enabled.");
-            }
-            InstallerOperations.RunSc(new[] { "config", InstallerOperations.ServiceName,
-                "start=", "disabled" }, true, report);
-            report("NTP source disabled; service stopped.");
-        }
-    }
-
     internal enum Health { Synced, Reply, Waiting }
 
     internal static Health WaitForFreshResult(TimeSpan maximum, Action<string> report)

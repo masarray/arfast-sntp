@@ -88,3 +88,28 @@ expands a bounded list of real worker correction events.
 **Multi-server support is a separate canonical worker milestone**.
 Do not display functional enable toggles or Add Server until the worker
 supports multiple peer health/selection and persisted configuration.
+
+## Source toggle acceptance — service stays installed and RUNNING
+
+- A single approved installer elevation is allowed; each subsequent ON/OFF
+  click must **not** launch a helper EXE, ask for UAC, change SCM startup type,
+  or stop/restart the ARFastSNTP service.
+- Source OFF writes the service-owned HKLM preference, prevents any further
+  `SetSystemTime` after acknowledgement, and pauses SNTP polling in the worker.
+  While OFF, PC Sync says NTP off, not falsely No reply / Synced.
+- Source ON wakes that SAME running worker, clears pre-toggle sample trust,
+  and resumes unicast NTP polling. Fresh verified samples are required before
+  claiming synchronized.
+- ON/OFF preference remains after reboot and worker restart, including when
+  Studio is closed. Full uninstall cleans the app-owned preference key.
+- Control uses a fixed-size two-byte request/three-byte response protocol and
+  an explicit Windows pipe DACL for LocalSystem, Administrators and INTERACTIVE
+  Windows logon sessions. Never expose a TCP/HTTP endpoint or generic command.
+  Interaction by signed-in users is only appropriate on an authorized isolated
+  certification host. Verify the DACL on physical Windows as part of acceptance.
+- Two Studio instances remain consistent within the periodic state refresh;
+  lost/old worker control pipe disables toggle and produces a clear tooltip.
+- DPI 100/125/150/200%, summary 66 DIP tall, switch 34x19 DIP, grid focus
+  remains visible. No overflow or unnecessary top-card text.
+- SmartScreen installer reputation is solved separately by publisher code
+  signing; no attempt to bypass Windows protection is permitted.

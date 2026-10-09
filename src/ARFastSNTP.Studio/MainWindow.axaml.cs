@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using System.ComponentModel;
+using ARFastSNTP;
 using Microsoft.Win32;
 using System.Globalization;
 using Avalonia.Controls;
@@ -60,6 +60,8 @@ public sealed partial class MainWindow : Window
     private bool _serviceInstalled;
     private bool _serviceStateKnown;
     private bool _sourceActionPending;
+    private bool _controlAvailable;
+    private bool _controlReading;
     private string? _lastUnavailableKey;
     private string? _displayedTimezone;
     private static readonly string ChevronDown =
@@ -105,6 +107,7 @@ public sealed partial class MainWindow : Window
         };
         RefreshClock();
         RefreshServiceState();
+        _ = CheckControlAsync();
         _ = PollStatusAsync();
     }
 
@@ -116,8 +119,10 @@ public sealed partial class MainWindow : Window
     {
         RefreshClock();
         if (++_ticks % 2 != 0) return; // one status tick per second
-        RefreshServiceState();
-        if (_lastSnapshot is not null && _lastFileChange.IsRunning &&
+        if (_ticks % 4 == 0) RefreshServiceState();
+        if (_ticks % 10 == 0) _ = CheckControlAsync();
+        if (_configuredEnabled && _lastSnapshot is not null &&
+            _lastFileChange.IsRunning &&
             _lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
             ShowUnavailable("NTP data is out of date.");
         // Never suspend polling when stale: this is how the monitor recovers
@@ -171,11 +176,9 @@ public sealed partial class MainWindow : Window
         _reading = true;
         try
         {
-            if (!_configuredEnabled)
+            if (!_serviceInstalled)
             {
-                ShowUnavailable(_serviceInstalled
-                    ? "NTP is turned off."
-                    : "NTP service is not installed.");
+                ShowUnavailable("NTP service is not installed.");
                 return;
             }
             var info = new FileInfo(_statusPath);
@@ -219,6 +222,14 @@ public sealed partial class MainWindow : Window
             _lastKnownServer = snap.Server;
             SetText(_peerAddress, snap.Server);
             var view = StudioStatusPresenter.Create(snap);
+            if (!_configuredEnabled)
+            {
+                // On/off comes from protected registry + authenticated pipe,
+                // not from a stale legacy snapshot written before OFF.
+                ShowUnavailable("NTP source is off.");
+                UpdateHistory(snap);
+                return;
+            }
             _lastSampleValid = view.ValidReply;
             SetText(_syncState, view.PcSync);
             SetText(_peerHealth, view.ServerHealth);
@@ -360,100 +371,126 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(
+            using var service = Registry.LocalMachine.OpenSubKey(
                 @"SYSTEM\CurrentControlSet\Services\ARFastSNTP");
-            bool installed = key is not null;
-            int startMode = installed ? Convert.ToInt32(key!.GetValue("Start", 3)) : 4;
-            bool enabled = installed && startMode != 4;
-            _sourceToggle.IsEnabled = installed && !_sourceActionPending;
-
-            // SCM start type seldom changes. Repaint only at the actual
-            // transition; do not race status-reader results every second.
-            if (_serviceStateKnown && installed == _serviceInstalled &&
-                enabled == _configuredEnabled)
-                return;
-
-            _serviceStateKnown = true;
-            _serviceInstalled = installed;
-            _configuredEnabled = enabled;
-            var green = BrushResolver.Require(this, "ArBrush.Success");
-            var gray = BrushResolver.Require(this, "ArBrush.TextDim");
-            _sourceTrack.Background = BrushResolver.Require(this,
-                enabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
-            _sourceThumb.HorizontalAlignment = enabled
-                ? Avalonia.Layout.HorizontalAlignment.Right
-                : Avalonia.Layout.HorizontalAlignment.Left;
-            _sourceThumb.Fill = BrushResolver.Require(this,
-                enabled ? "ArBrush.Canvas" : "ArBrush.Text");
-            // Enabled is a configured source, NOT proof the server replied.
-            _serverIcon.Fill = enabled ? green : gray;
-            ToolTip.SetTip(_serverIcon, enabled ? "NTP source enabled" : "NTP source off");
-            ToolTip.SetTip(_sourceToggle, installed
-                ? enabled ? "Turn NTP off" : "Turn NTP on"
-                : "Install AR Fast SNTP first");
-
-            // Invalidate the cache only when the service is toggled.
-            _lastSnapshot = null;
-            _lastUnavailableKey = null;
-            _lastFileChange.Reset();
-            if (!enabled)
-                ShowUnavailable(installed ? "Turn on NTP to sync time."
-                    : "NTP service is not installed.");
+            bool installed = service is not null;
+            int startMode = installed ? Convert.ToInt32(service!.GetValue("Start", 3)) : 4;
+            // StartMode is the service lifecycle, not the per-source switch.
+            bool serviceConfigured = installed && startMode != 4;
+            using var settings = Registry.LocalMachine.OpenSubKey(
+                SourceControlProtocol.SettingsKey);
+            bool enabled = serviceConfigured &&
+                (settings?.GetValue(SourceControlProtocol.SettingName) as int?) != 0;
+            ApplySourceState(installed, enabled);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
             or System.Security.SecurityException)
         {
+            _controlAvailable = false;
             _sourceToggle.IsEnabled = false;
+        }
+    }
+
+    private void ApplySourceState(bool installed, bool enabled)
+    {
+        _sourceToggle.IsEnabled = installed && _controlAvailable && !_sourceActionPending;
+        if (_serviceStateKnown && installed == _serviceInstalled &&
+            enabled == _configuredEnabled)
+            return;
+
+        _serviceStateKnown = true;
+        _serviceInstalled = installed;
+        _configuredEnabled = enabled;
+        var green = BrushResolver.Require(this, "ArBrush.Success");
+        var gray = BrushResolver.Require(this, "ArBrush.TextDim");
+        _sourceTrack.Background = BrushResolver.Require(this,
+            enabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
+        _sourceThumb.HorizontalAlignment = enabled
+            ? Avalonia.Layout.HorizontalAlignment.Right
+            : Avalonia.Layout.HorizontalAlignment.Left;
+        _sourceThumb.Fill = BrushResolver.Require(this,
+            enabled ? "ArBrush.Canvas" : "ArBrush.Text");
+        _serverIcon.Fill = enabled ? green : gray;
+        ToolTip.SetTip(_serverIcon, enabled ? "NTP source enabled" : "NTP source off");
+        ToolTip.SetTip(_sourceToggle, !_controlAvailable
+            ? "Update the Windows Service to control NTP"
+            : enabled ? "Stop using this NTP source" : "Use this NTP source");
+
+        _lastSnapshot = null;
+        _lastUnavailableKey = null;
+        _lastFileChange.Reset();
+        if (!enabled)
+            ShowUnavailable(installed ? "NTP source off" : "Service not installed.");
+    }
+
+    private async Task CheckControlAsync()
+    {
+        if (_closed || _controlReading || _sourceActionPending) return;
+        _controlReading = true;
+        try
+        {
+            bool enabled = await SourceControlProtocol.SendAsync(
+                SourceControlProtocol.Query, _shutdown.Token);
+            if (_closed) return;
+            _controlAvailable = true;
+            ApplySourceState(_serviceInstalled, enabled);
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException
+            or UnauthorizedAccessException or InvalidDataException
+            or OperationCanceledException)
+        {
+            if (_closed) return;
+            _controlAvailable = false;
+            _sourceToggle.IsEnabled = false;
+            ToolTip.SetTip(_sourceToggle, "NTP control unavailable. Update or restart the service.");
+        }
+        finally
+        {
+            _controlReading = false;
+            if (!_closed)
+                _sourceToggle.IsEnabled = _serviceInstalled &&
+                    _controlAvailable && !_sourceActionPending;
         }
     }
 
     private async void ToggleSource_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (_sourceActionPending) return;
-        string exe = System.IO.Path.GetFullPath(System.IO.Path.Combine(
-            AppContext.BaseDirectory, "..", "setup", "ARFastSNTP.Setup.exe"));
-        if (!File.Exists(exe))
-        {
-            _connectionHint.Text = "NTP service setup is missing. Run the installer again.";
-            return;
-        }
+        if (_sourceActionPending || !_controlAvailable || !_serviceInstalled) return;
         _sourceActionPending = true;
         _sourceToggle.IsEnabled = false;
-        bool enable = !_configuredEnabled;
-        _connectionHint.Text = enable ? "Enabling NTP..." : "Disabling NTP...";
+        bool requested = !_configuredEnabled;
         try
         {
-            using var child = Process.Start(new ProcessStartInfo
-            {
-                FileName = exe,
-                WorkingDirectory = System.IO.Path.GetDirectoryName(exe)!,
-                UseShellExecute = true,
-                Verb = "runas",
-                Arguments = enable ? "--source-enable" : "--source-disable"
-            }) ?? throw new InvalidOperationException("NTP control could not start.");
-            await child.WaitForExitAsync(_shutdown.Token);
+            // Fixed two-byte command to the already-running Windows Service.
+            // No process launch, installer, SCM modification, UAC or SmartScreen.
+            bool acknowledged = await SourceControlProtocol.SendAsync(
+                requested ? SourceControlProtocol.Enable : SourceControlProtocol.Disable,
+                _shutdown.Token);
             if (_closed) return;
-            _connectionHint.Text = child.ExitCode == 0
-                ? enable ? "NTP enabled" : "NTP disabled"
-                : "Could not change NTP. Check service permissions.";
+            ApplySourceState(_serviceInstalled, acknowledged);
             _lastSnapshot = null;
             _lastUnavailableKey = null;
+            if (!acknowledged)
+                ShowUnavailable("NTP source is off.");
+            _ = PollStatusAsync();
         }
-        catch (Win32Exception)
+        catch (Exception ex) when (ex is IOException or TimeoutException
+            or UnauthorizedAccessException or InvalidDataException)
         {
-            _connectionHint.Text = "Windows Administrator approval was cancelled.";
+            if (!_closed)
+            {
+                SetText(_connectionHint, "Could not reach NTP service control.");
+                _connectionHint.IsVisible = true;
+                _ = CheckControlAsync();
+            }
         }
         catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException)
-        {
-            _connectionHint.Text = "Could not change NTP: " + ex.Message;
-        }
         finally
         {
             _sourceActionPending = false;
             if (!_closed)
             {
-                RefreshServiceState();
+                _sourceToggle.IsEnabled = _serviceInstalled && _controlAvailable;
                 _ = PollStatusAsync();
             }
         }

@@ -1,20 +1,20 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
-        Title="AR Fast SNTP" Width="940" Height="390"
-        MinWidth="850" MinHeight="375"
+        Title="AR Fast SNTP" Width="940" Height="358"
+        MinWidth="850" MinHeight="340"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
   <!-- Content-sized sections: one source never creates an empty table viewport. -->
-  <Grid Margin="20,12,20,12" RowDefinitions="32,87,Auto,Auto" RowSpacing="10">
+  <Grid Margin="18,10,18,12" RowDefinitions="29,66,Auto,Auto" RowSpacing="9">
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="9">
         <Viewbox Width="19" Height="19">
           <Path Width="960" Height="960" Stretch="Uniform"
                 Data="M636-848.5Q709-817 763-763t85.5 127Q880-563 880-480v11q-19-13-39-23t-42-17q-8-89-61-161.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h257q-62 37-99.5 100.5T440-240q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 125 83 216.5T451-161q7 23 17 42.5T491-80h-11q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5Zm-57.5 750Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM786-146l28-28-74-74v-112h-40v128l86 86Z" Fill="{DynamicResource ArBrush.Success}"/>
         </Viewbox>
-        <TextBlock Text="AR Fast SNTP" FontSize="15" FontWeight="SemiBold"
+        <TextBlock Text="AR Fast SNTP" FontSize="14" FontWeight="SemiBold"
                    VerticalAlignment="Center"/>
       </StackPanel>
       <Button Grid.Column="1" Classes="ar" Width="32" Height="30" Padding="5"
@@ -31,17 +31,17 @@
 
     <!-- A single calm summary strip; no border around each metric. -->
     <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface1}"
-            CornerRadius="10" Padding="17,10">
-      <Grid ColumnDefinitions="1*,1*" ColumnSpacing="23">
+            CornerRadius="9" Padding="15,8">
+      <Grid ColumnDefinitions="1*,1*" ColumnSpacing="20">
         <Grid RowDefinitions="Auto,*,Auto">
           <TextBlock Text="PC TIME" ToolTip.Tip="Local Windows time" Classes="micro"/>
           <TextBlock x:Name="PcClock" Grid.Row="1" Text="--:--:--"
-                     FontSize="31" FontWeight="SemiBold"
+                     FontSize="24" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
           <TextBlock x:Name="PcDate" Grid.Row="2" Classes="muted" Text="—"/>
         </Grid>
         <Border Grid.Column="1" BorderThickness="1,0,0,0"
-                BorderBrush="{DynamicResource ArBrush.Stroke}" Padding="22,0,0,0">
+                BorderBrush="{DynamicResource ArBrush.Stroke}" Padding="20,0,0,0">
           <Grid RowDefinitions="Auto,*">
             <TextBlock Text="SYNC STATUS" Classes="micro"/>
             <StackPanel Grid.Row="1" Orientation="Horizontal"
@@ -49,7 +49,7 @@
               <TextBlock x:Name="SyncLamp" Text="●" FontSize="16"
                          Foreground="{DynamicResource ArBrush.TextDim}"/>
               <TextBlock x:Name="SyncState" Text="Checking"
-                         FontSize="21" FontWeight="SemiBold"
+                         FontSize="18" FontWeight="SemiBold"
                          ToolTip.Tip="The PC is synchronized only after a valid NTP reply."/>
             </StackPanel>
           </Grid>
@@ -59,10 +59,10 @@
 
     <!-- The number of displayed rows determines the list height. -->
     <Border Grid.Row="2" Background="{DynamicResource ArBrush.Surface1}"
-            CornerRadius="10" Padding="14,10,14,10">
-      <Grid RowDefinitions="28,30,44,Auto">
+            CornerRadius="9" Padding="14,11,14,10">
+      <Grid RowDefinitions="28,30,42,Auto">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-          <TextBlock Text="NTP Servers" FontSize="14" FontWeight="SemiBold"
+          <TextBlock Text="NTP Servers" FontSize="15" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
           <TextBlock x:Name="ListCount" Grid.Column="1"
                      Classes="micro" Text="1 server" VerticalAlignment="Center"/>
@@ -83,11 +83,11 @@
         <Grid Grid.Row="2" Margin="11,0"
               ColumnDefinitions="30,48,*,100,66,108,126,76" ColumnSpacing="4">
           <TextBlock Text="01" Classes="muted" VerticalAlignment="Center"/>
-          <!-- 34x19 switch within a 40x30 click target; visual state is confirmed SCM setting. -->
+          <!-- One source toggle: worker pause/resume over a restricted local control pipe. -->
           <Button x:Name="SourceToggle" Grid.Column="1" Width="40" Height="30"
                   Padding="0" BorderThickness="0" Background="Transparent"
                   Click="ToggleSource_OnClick"
-                  ToolTip.Tip="Enable / disable NTP service">
+                  ToolTip.Tip="Use this NTP source">
             <Border x:Name="SourceTrack" Width="34" Height="19"
                     CornerRadius="10" Background="{DynamicResource ArBrush.StrokeStrong}">
               <Grid Margin="3,0">

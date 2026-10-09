@@ -10,6 +10,7 @@ internal sealed class SyncWorker : BackgroundService
 {
     private readonly SyncOptions _options;
     private readonly ILogger<SyncWorker> _logger;
+    private readonly SourceControlState _source;
     private readonly Queue<string> _corrections = new();
     private long _requests, _accepted, _rejected;
     private DateTimeOffset? _lastCorrection;
@@ -19,34 +20,70 @@ internal sealed class SyncWorker : BackgroundService
     private long _lastStatusLogTimestamp;
     private string? _lastLoggedState;
 
-    internal SyncWorker(SyncOptions options, ILogger<SyncWorker> logger)
+    internal SyncWorker(SyncOptions options, ILogger<SyncWorker> logger,
+        SourceControlState source)
     {
         _options = options;
         _logger = logger;
+        _source = source;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         int failures = 0;
+        bool wasEnabled = true;
         _logger.LogInformation("SNTP worker started; peer={Peer}, step enabled={Step}",
             _options.Server, _options.AllowStep);
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!_source.Enabled)
+            {
+                if (wasEnabled)
+                {
+                    wasEnabled = false;
+                    _validatedBaseline = false;
+                    _pendingVerification = false;
+                    Remember("NTP source disabled. No polling or clock correction.");
+                    Publish(new StatusSnapshot(DateTimeOffset.UtcNow,
+                        _options.Server.ToString(), "Disabled", null, null, null,
+                        "NTP source is turned off.")
+                    { LastCorrectionUtc = _lastCorrection });
+                }
+                // No periodic polling, zero UDP requests, no busy loop while OFF.
+                try { await _source.WaitUntilChangedAsync(stoppingToken); }
+                catch (OperationCanceledException) { break; }
+                continue;
+            }
+            if (!wasEnabled)
+            {
+                wasEnabled = true;
+                failures = 0;
+                _validatedBaseline = false;
+                Remember("NTP source enabled. Polling resumed.");
+                Publish(new StatusSnapshot(DateTimeOffset.UtcNow,
+                    _options.Server.ToString(), "Starting", null, null, null,
+                    "Waiting for a valid NTP reply.")
+                { LastCorrectionUtc = _lastCorrection });
+            }
             var batchStartUtc = DateTimeOffset.UtcNow;
             var batchClock = Stopwatch.StartNew();
             try
             {
                 SntpSample first = await QueryCountedAsync(stoppingToken);
+                if (!_source.Enabled) continue;
                 SntpSample measured = first;
                 bool burst = PollPolicy.RequiresBurst(_validatedBaseline, first);
                 if (burst)
                 {
                     await Task.Delay(100, stoppingToken);
+                    if (!_source.Enabled) continue;
                     SntpSample second = await QueryCountedAsync(stoppingToken);
                     await Task.Delay(100, stoppingToken);
+                    if (!_source.Enabled) continue;
                     SntpSample third = await QueryCountedAsync(stoppingToken);
                     measured = PollPolicy.MedianCoherent(first, second, third);
                 }
+                if (!_source.Enabled) continue;
 
                 // Never apply an offset derived from samples spanning a wall-clock discontinuity.
                 if (ClockDiscontinuity.Detected(batchStartUtc, DateTimeOffset.UtcNow,
@@ -82,7 +119,10 @@ internal sealed class SyncWorker : BackgroundService
                         if (ClockDiscontinuity.Detected(batchStartUtc, DateTimeOffset.UtcNow,
                             batchClock.Elapsed))
                             throw new InvalidOperationException("Windows time moved before correction.");
-                        var set = WindowsClock.SetUtc(DateTimeOffset.UtcNow + measured.Offset);
+                        // Disabling source and stepping time share a short lock:
+                        // no SetSystemTime may begin after OFF acknowledgement.
+                        if (!_source.TrySetTime(DateTimeOffset.UtcNow + measured.Offset, out var set))
+                            continue;
                         evt = set.Success
                             ? $"Clock stepped by {measured.Offset.TotalMilliseconds:+0.0;-0.0;0.0} ms; verifying."
                             : $"Clock correction FAILED (Win32 {set.Error}).";
@@ -99,13 +139,15 @@ internal sealed class SyncWorker : BackgroundService
                     }
                 }
 
+                if (!_source.Enabled) continue;
                 failures = 0;
                 Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
                     state, measured.Offset.TotalMilliseconds, measured.RttMs, serverUtc, evt)
                 {
                     Stratum = measured.Stratum, LastCorrectionUtc = _lastCorrection
                 });
-                await Task.Delay(PollPolicy.NextInterval(synchronized, _options.AllowStep),
+                await _source.WaitAsync(
+                    PollPolicy.NextInterval(synchronized, _options.AllowStep),
                     stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -114,34 +156,44 @@ internal sealed class SyncWorker : BackgroundService
             }
             catch (NtpKissOfDeathException ex) when (ex.Code is "DENY" or "RSTR")
             {
+                if (!_source.Enabled) continue;
                 _validatedBaseline = false;
                 _logger.LogError("NTP peer permanently denied polling: {Code}", ex.Code);
                 Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
                     "Server denied", null, null, null, ex.Message)
                 { LastCorrectionUtc = _lastCorrection });
-                // Remain visible to the GUI without sending additional NTP requests.
-                while (!stoppingToken.IsCancellationRequested)
+                // A DENY response is not retried. Only an explicit operator
+                // ON/OFF transition or service restart re-enables probing.
+                while (!stoppingToken.IsCancellationRequested && _source.Enabled)
                 {
-                    try { await Task.Delay(PollPolicy.StableInterval, stoppingToken); }
+                    try
+                    {
+                        if (await _source.WaitAsync(PollPolicy.StableInterval, stoppingToken))
+                            break;
+                    }
                     catch (OperationCanceledException) { break; }
-                    Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
-                        "Server denied", null, null, null, ex.Message)
-                    { LastCorrectionUtc = _lastCorrection });
+                    if (_source.Enabled)
+                        Publish(new StatusSnapshot(DateTimeOffset.UtcNow,
+                            _options.Server.ToString(), "Server denied", null, null, null,
+                            ex.Message)
+                        { LastCorrectionUtc = _lastCorrection });
                 }
-                break; // A denied peer is not polled again until service restart.
+                continue;
             }
             catch (NtpKissOfDeathException ex) when (ex.Code == "RATE")
             {
+                if (!_source.Enabled) continue;
                 _validatedBaseline = false;
                 _logger.LogWarning("NTP server requested rate backoff.");
                 Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
                     "Rate limited", null, null, null, ex.Message)
                 { LastCorrectionUtc = _lastCorrection });
-                try { await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken); }
+                try { await _source.WaitAsync(TimeSpan.FromMinutes(1), stoppingToken); }
                 catch (OperationCanceledException) { break; }
             }
             catch (Exception ex)
             {
+                if (!_source.Enabled) continue;
                 _validatedBaseline = false;
                 failures = Math.Min(failures + 1, 5);
                 _logger.LogWarning("SNTP poll rejected: {Reason}", ex.Message);
@@ -150,7 +202,7 @@ internal sealed class SyncWorker : BackgroundService
                 { LastCorrectionUtc = _lastCorrection });
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(30, 1 << failures)),
+                    await _source.WaitAsync(TimeSpan.FromSeconds(Math.Min(30, 1 << failures)),
                         stoppingToken);
                 }
                 catch (OperationCanceledException) { break; }
@@ -186,7 +238,8 @@ internal sealed class SyncWorker : BackgroundService
         snapshot = snapshot with
         {
             RequestCount = _requests, AcceptedCount = _accepted, RejectedCount = _rejected,
-            StepEnabled = _options.AllowStep, RecentCorrections = _corrections.ToArray()
+            StepEnabled = _options.AllowStep, SourceEnabled = _source.Enabled,
+            RecentCorrections = _corrections.ToArray()
         };
         try
         {

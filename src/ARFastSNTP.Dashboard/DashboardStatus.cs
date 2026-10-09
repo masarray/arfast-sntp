@@ -19,6 +19,8 @@ internal sealed record DashboardStatus
     public long AcceptedCount { get; init; }
     public long RejectedCount { get; init; }
     public bool StepEnabled { get; init; }
+    // Missing in older workers: enabled is the backward-compatible default.
+    public bool SourceEnabled { get; init; } = true;
     public byte? Stratum { get; init; }
     public DateTimeOffset? LastCorrectionUtc { get; init; }
     public string Broadcast { get; init; } = "Not measured";

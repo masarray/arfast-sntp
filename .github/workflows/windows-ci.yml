@@ -108,8 +108,20 @@ jobs:
           $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
           if (-not $viewCode.Contains('_serverIcon.Fill = enabled ? green : gray') -or
               -not $viewCode.Contains('if (!changed && _lastUnavailableKey is null)') -or
-              -not $viewCode.Contains('if (!string.Equals(target.Text, value')) {
-            throw 'Missing server ON/OFF color, status coalescing or deduplicated text'
+              -not $viewCode.Contains('if (!string.Equals(target.Text, value') -or
+              -not $viewCode.Contains('SourceControlProtocol.SendAsync')) {
+            throw 'Missing server color, status coalescing or real source IPC'
+          }
+          if ($viewCode.Contains('Verb = "runas"') -or
+              $viewCode.Contains('Process.Start(') -or
+              $viewCode.Contains('SourceServiceControl.SetEnabled')) {
+            throw 'A source toggle must not launch a privileged helper or stop SCM service'
+          }
+          $poll = Get-Content 'src/ARFastSNTP/SyncWorker.cs' -Raw
+          if (-not $poll.Contains('WaitUntilChangedAsync') -or
+              -not $poll.Contains('TrySetTime') -or
+              -not $poll.Contains('SourceEnabled = _source.Enabled')) {
+            throw 'Worker lacks persisted NTP pause, correction barrier or status truth'
           }
           $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
           if (-not $wizard.Contains('Enter NTP Server IP Address') -or

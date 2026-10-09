@@ -26,6 +26,18 @@ internal static class StudioStatusPresenter
         string stratum = valid && snapshot.Stratum.HasValue
             ? snapshot.Stratum.Value.ToString(CultureInfo.InvariantCulture) : "—";
 
+        if (!snapshot.SourceEnabled ||
+            string.Equals(snapshot.State, "Disabled", StringComparison.OrdinalIgnoreCase))
+            return new StudioStatusView(
+                PcSync: "NTP off",
+                PcDetail: "NTP source is disabled",
+                ServerHealth: "Off",
+                Footer: "",
+                ServerOffset: "—",
+                Stratum: "—",
+                ValidReply: false,
+                Synchronized: false);
+
         if (!valid)
         {
             bool denied = snapshot.State.Contains("denied", StringComparison.OrdinalIgnoreCase);
