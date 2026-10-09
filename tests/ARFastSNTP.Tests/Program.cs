@@ -189,7 +189,16 @@ Check("Studio reports no verified sync for failed NTP request",
 Check("Studio shows actionable timeout rather than repeated No reply",
     noReply.ServerHealth == "No reply" &&
     noReply.Footer.Contains("UDP 123", StringComparison.Ordinal) &&
-    noReply.Footer.Contains("0/12 valid replies", StringComparison.Ordinal));
+    !noReply.Footer.Contains("valid replies", StringComparison.Ordinal));
+// Counters and updated timestamps change every second; the steady-state
+// main-view model must stay equal when these diagnostics change.
+var stillNoReply = unreachable with
+{
+    RequestCount = 500, RejectedCount = 500,
+    UpdatedUtc = testUtc.AddMinutes(5)
+};
+Check("Studio status stable despite continuous failed request counters",
+    ARFastSNTP.Studio.StudioStatusPresenter.Create(stillNoReply) == noReply);
 var aligned = unreachable with
 {
     State = "Synchronized", LastEvent = null, OffsetMilliseconds = 0.4,
@@ -200,6 +209,13 @@ var good = ARFastSNTP.Studio.StudioStatusPresenter.Create(aligned);
 Check("Studio sync label requires valid time from peer",
     good.Synchronized && good.PcSync == "Synced" &&
     good.ServerHealth == "Online" && good.Stratum == "1");
+var newerAligned = aligned with
+{
+    RequestCount = 12345, AcceptedCount = 12000,
+    UpdatedUtc = testUtc.AddSeconds(20), RoundTripMilliseconds = 8.7
+};
+Check("Studio keeps steady valid status when counters and RTT vary",
+    ARFastSNTP.Studio.StudioStatusPresenter.Create(newerAligned) == good);
 var spoofed = aligned with { OffsetMilliseconds = null, EstimatedServerUtc = null };
 Check("Studio never equates synchronized text with a missing timestamp",
     !ARFastSNTP.Studio.StudioStatusPresenter.Create(spoofed).Synchronized);

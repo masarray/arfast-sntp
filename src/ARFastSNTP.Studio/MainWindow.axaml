@@ -1,14 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
-        Title="AR Fast SNTP" Width="960" Height="440"
-        MinWidth="850" MinHeight="415"
+        Title="AR Fast SNTP" Width="940" Height="390"
+        MinWidth="850" MinHeight="375"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
   <!-- Content-sized sections: one source never creates an empty table viewport. -->
-  <Grid Margin="20,14,20,16" RowDefinitions="34,96,Auto,Auto" RowSpacing="11">
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="14">
+  <Grid Margin="20,12,20,12" RowDefinitions="32,87,Auto,Auto" RowSpacing="10">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="9">
         <Viewbox Width="19" Height="19">
           <Path Width="960" Height="960" Stretch="Uniform"
@@ -17,14 +17,7 @@
         <TextBlock Text="AR Fast SNTP" FontSize="15" FontWeight="SemiBold"
                    VerticalAlignment="Center"/>
       </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                  VerticalAlignment="Center">
-        <TextBlock x:Name="GlobalLamp" Text="●" FontSize="12"
-                   Foreground="{DynamicResource ArBrush.TextDim}"/>
-        <TextBlock x:Name="GlobalStatus" Text="Checking service" Classes="muted"
-                   VerticalAlignment="Center"/>
-      </StackPanel>
-      <Button Grid.Column="2" Classes="ar" Width="32" Height="30" Padding="5"
+      <Button Grid.Column="1" Classes="ar" Width="32" Height="30" Padding="5"
               Background="Transparent" BorderThickness="0"
               Click="Refresh_OnClick" ToolTip.Tip="Refresh now">
         <Viewbox Width="17" Height="17">
@@ -38,10 +31,10 @@
 
     <!-- A single calm summary strip; no border around each metric. -->
     <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface1}"
-            CornerRadius="10" Padding="17,12">
+            CornerRadius="10" Padding="17,10">
       <Grid ColumnDefinitions="1*,1*" ColumnSpacing="23">
         <Grid RowDefinitions="Auto,*,Auto">
-          <TextBlock Text="PC TIME  ·  LOCAL" Classes="micro"/>
+          <TextBlock Text="PC TIME" ToolTip.Tip="Local Windows time" Classes="micro"/>
           <TextBlock x:Name="PcClock" Grid.Row="1" Text="--:--:--"
                      FontSize="31" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
@@ -49,18 +42,16 @@
         </Grid>
         <Border Grid.Column="1" BorderThickness="1,0,0,0"
                 BorderBrush="{DynamicResource ArBrush.Stroke}" Padding="22,0,0,0">
-          <Grid RowDefinitions="Auto,*,Auto">
-            <TextBlock Text="PC SYNC STATUS" Classes="micro"/>
+          <Grid RowDefinitions="Auto,*">
+            <TextBlock Text="SYNC STATUS" Classes="micro"/>
             <StackPanel Grid.Row="1" Orientation="Horizontal"
                         VerticalAlignment="Center" Spacing="9">
               <TextBlock x:Name="SyncLamp" Text="●" FontSize="16"
                          Foreground="{DynamicResource ArBrush.TextDim}"/>
               <TextBlock x:Name="SyncState" Text="Checking"
-                         FontSize="21" FontWeight="SemiBold"/>
+                         FontSize="21" FontWeight="SemiBold"
+                         ToolTip.Tip="The PC is synchronized only after a valid NTP reply."/>
             </StackPanel>
-            <TextBlock x:Name="SyncDetail" Grid.Row="2" Classes="muted"
-                       Text="Checking NTP connection..."
-                       TextTrimming="CharacterEllipsis"/>
           </Grid>
         </Border>
       </Grid>
@@ -68,8 +59,8 @@
 
     <!-- The number of displayed rows determines the list height. -->
     <Border Grid.Row="2" Background="{DynamicResource ArBrush.Surface1}"
-            CornerRadius="10" Padding="14,11,14,12">
-      <Grid RowDefinitions="29,33,51,27">
+            CornerRadius="10" Padding="14,10,14,10">
+      <Grid RowDefinitions="28,30,44,Auto">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
           <TextBlock Text="NTP Servers" FontSize="14" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
@@ -78,7 +69,7 @@
         </Grid>
         <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface2}"
                 CornerRadius="5" Padding="11,0">
-          <Grid ColumnDefinitions="32,55,*,102,69,109,131,79" ColumnSpacing="4">
+          <Grid ColumnDefinitions="30,48,*,100,66,108,126,76" ColumnSpacing="4">
             <TextBlock Text="#" Classes="micro" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="Use" Classes="micro" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="2" Text="NTP Server IP" Classes="micro" VerticalAlignment="Center"/>
@@ -90,17 +81,17 @@
           </Grid>
         </Border>
         <Grid Grid.Row="2" Margin="11,0"
-              ColumnDefinitions="32,55,*,102,69,109,131,79" ColumnSpacing="4">
+              ColumnDefinitions="30,48,*,100,66,108,126,76" ColumnSpacing="4">
           <TextBlock Text="01" Classes="muted" VerticalAlignment="Center"/>
-          <!-- Actual service switch, not the tiny material glyph scaled down. -->
-          <Button x:Name="SourceToggle" Grid.Column="1" Width="47" Height="34"
+          <!-- 34x19 switch within a 40x30 click target; visual state is confirmed SCM setting. -->
+          <Button x:Name="SourceToggle" Grid.Column="1" Width="40" Height="30"
                   Padding="0" BorderThickness="0" Background="Transparent"
                   Click="ToggleSource_OnClick"
                   ToolTip.Tip="Enable / disable NTP service">
-            <Border x:Name="SourceTrack" Width="43" Height="24"
-                    CornerRadius="12" Background="{DynamicResource ArBrush.StrokeStrong}">
+            <Border x:Name="SourceTrack" Width="34" Height="19"
+                    CornerRadius="10" Background="{DynamicResource ArBrush.StrokeStrong}">
               <Grid Margin="3,0">
-                <Ellipse x:Name="SourceThumb" Width="18" Height="18"
+                <Ellipse x:Name="SourceThumb" Width="13" Height="13"
                          HorizontalAlignment="Left" VerticalAlignment="Center"
                          Fill="{DynamicResource ArBrush.Text}"/>
               </Grid>
@@ -109,8 +100,8 @@
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                       VerticalAlignment="Center">
             <Viewbox Width="17" Height="17">
-              <Path Width="960" Height="960" Stretch="Uniform"
-                    Data="M636-848.5Q709-817 763-763t85.5 127Q880-563 880-480v11q-19-13-39-23t-42-17q-8-89-61-161.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h257q-62 37-99.5 100.5T440-240q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 125 83 216.5T451-161q7 23 17 42.5T491-80h-11q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5Zm-57.5 750Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM786-146l28-28-74-74v-112h-40v128l86 86Z" Fill="{DynamicResource ArBrush.TextSecondary}"/>
+              <Path x:Name="ServerIcon" Width="960" Height="960" Stretch="Uniform"
+                    Data="M636-848.5Q709-817 763-763t85.5 127Q880-563 880-480v11q-19-13-39-23t-42-17q-8-89-61-161.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h257q-62 37-99.5 100.5T440-240q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 125 83 216.5T451-161q7 23 17 42.5T491-80h-11q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5Zm-57.5 750Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM786-146l28-28-74-74v-112h-40v128l86 86Z" Fill="{DynamicResource ArBrush.TextDim}"/>
             </Viewbox>
             <TextBlock x:Name="PeerAddress" Text="—" FontWeight="SemiBold"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -127,12 +118,10 @@
                      VerticalAlignment="Center"
                      ToolTip.Tip="Broadcast listening is not yet supported."/>
         </Grid>
-        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="9,2,9,0">
-          <TextBlock x:Name="ConnectionHint" Text="Checking server connection..."
+        <Grid Grid.Row="3" Margin="9,2,9,0">
+          <TextBlock x:Name="ConnectionHint" IsVisible="False" Text="Checking server..."
                      Classes="muted" TextTrimming="CharacterEllipsis"
                      FontSize="11" VerticalAlignment="Center"/>
-          <TextBlock x:Name="LastReply" Grid.Column="1" Text="—"
-                     Classes="micro" VerticalAlignment="Center"/>
         </Grid>
       </Grid>
     </Border>

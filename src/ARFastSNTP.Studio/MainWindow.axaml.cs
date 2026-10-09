@@ -21,12 +21,10 @@ public sealed partial class MainWindow : Window
 {
     private readonly TextBlock _pcClock;
     private readonly TextBlock _pcDate;
-    private readonly TextBlock _globalLamp;
-    private readonly TextBlock _globalStatus;
     private readonly TextBlock _syncLamp;
     private readonly TextBlock _syncState;
-    private readonly TextBlock _syncDetail;
     private readonly TextBlock _peerAddress;
+    private readonly Avalonia.Controls.Shapes.Path _serverIcon;
     private readonly Border _sourceTrack;
     private readonly Avalonia.Controls.Shapes.Ellipse _sourceThumb;
     private readonly Button _sourceToggle;
@@ -36,7 +34,6 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _peerClock;
     private readonly TextBlock _peerBroadcast;
     private readonly TextBlock _connectionHint;
-    private readonly TextBlock _lastReply;
     private readonly TextBlock _eventCount;
     private readonly StackPanel _historyEvents;
     private readonly ScrollViewer _historyScroll;
@@ -61,7 +58,10 @@ public sealed partial class MainWindow : Window
     private double _heightBeforeHistory;
     private bool _configuredEnabled;
     private bool _serviceInstalled;
+    private bool _serviceStateKnown;
     private bool _sourceActionPending;
+    private string? _lastUnavailableKey;
+    private string? _displayedTimezone;
     private static readonly string ChevronDown =
         "m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z";
     private static readonly string ChevronUp =
@@ -72,12 +72,10 @@ public sealed partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
         _pcClock = Required<TextBlock>("PcClock");
         _pcDate = Required<TextBlock>("PcDate");
-        _globalLamp = Required<TextBlock>("GlobalLamp");
-        _globalStatus = Required<TextBlock>("GlobalStatus");
         _syncLamp = Required<TextBlock>("SyncLamp");
         _syncState = Required<TextBlock>("SyncState");
-        _syncDetail = Required<TextBlock>("SyncDetail");
         _peerAddress = Required<TextBlock>("PeerAddress");
+        _serverIcon = Required<Avalonia.Controls.Shapes.Path>("ServerIcon");
         _sourceTrack = Required<Border>("SourceTrack");
         _sourceThumb = Required<Avalonia.Controls.Shapes.Ellipse>("SourceThumb");
         _sourceToggle = Required<Button>("SourceToggle");
@@ -87,7 +85,6 @@ public sealed partial class MainWindow : Window
         _peerClock = Required<TextBlock>("PeerClock");
         _peerBroadcast = Required<TextBlock>("PeerBroadcast");
         _connectionHint = Required<TextBlock>("ConnectionHint");
-        _lastReply = Required<TextBlock>("LastReply");
         _eventCount = Required<TextBlock>("EventCount");
         _historyEvents = Required<StackPanel>("HistoryEvents");
         _historyScroll = Required<ScrollViewer>("HistoryScroll");
@@ -118,13 +115,22 @@ public sealed partial class MainWindow : Window
     private void OnTick(object? sender, EventArgs e)
     {
         RefreshClock();
-        if (_ticks % 2 == 0)
-            RefreshServiceState();
+        if (++_ticks % 2 != 0) return; // one status tick per second
+        RefreshServiceState();
         if (_lastSnapshot is not null && _lastFileChange.IsRunning &&
             _lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
-            ShowUnavailable("Service status is not updating.");
-        if (++_ticks % 2 == 0)
-            _ = PollStatusAsync();
+            ShowUnavailable("NTP data is out of date.");
+        // Never suspend polling when stale: this is how the monitor recovers
+        // automatically when the worker/service resumes producing snapshots.
+        _ = PollStatusAsync();
+    }
+
+    // Avoid reassigning identical Text properties on every timer tick.
+    // A stable status label is not an animation and should not flicker.
+    private static void SetText(TextBlock target, string value)
+    {
+        if (!string.Equals(target.Text, value, StringComparison.Ordinal))
+            target.Text = value;
     }
 
     private void RefreshClock()
@@ -132,26 +138,36 @@ public sealed partial class MainWindow : Window
         // Display what the operator sees in Windows Settings. All SNTP math
         // remains UTC, and the timezone is a visual-only conversion.
         DateTimeOffset pcLocal = DateTimeOffset.Now;
-        _pcClock.Text = pcLocal.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        _pcDate.Text = pcLocal.ToString("ddd, dd MMM yyyy", CultureInfo.InvariantCulture) +
-            "  ·  UTC" + pcLocal.ToString("zzz", CultureInfo.InvariantCulture);
+        SetText(_pcClock, pcLocal.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+        SetText(_pcDate, pcLocal.ToString("ddd, dd MMM yyyy",
+            CultureInfo.InvariantCulture));
+        string timezone = pcLocal.ToString("zzz", CultureInfo.InvariantCulture);
+        if (!string.Equals(timezone, _displayedTimezone, StringComparison.Ordinal))
+        {
+            _displayedTimezone = timezone;
+            ToolTip.SetTip(_pcClock, "Local Windows time · UTC" + timezone);
+        }
         if (_lastSampleValid && _baseServerUtc is DateTimeOffset reference &&
             _lastFileChange.Elapsed <= TimeSpan.FromSeconds(12))
         {
             DateTimeOffset estimate = reference + _serverClock.Elapsed;
             var local = estimate.ToLocalTime();
-            _peerClock.Text = local.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-            ToolTip.SetTip(_peerClock,
-                local.ToString("ddd, dd MMM yyyy HH:mm:ss zzz", CultureInfo.InvariantCulture) +
-                "  ·  UTC " + estimate.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+            string next = local.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            if (!string.Equals(_peerClock.Text, next, StringComparison.Ordinal))
+            {
+                SetText(_peerClock, next);
+                ToolTip.SetTip(_peerClock, "Server: " +
+                    local.ToString("ddd, dd MMM yyyy HH:mm:ss zzz",
+                        CultureInfo.InvariantCulture));
+            }
         }
         else
-            _peerClock.Text = "—";
+            SetText(_peerClock, "—");
     }
 
     private async Task PollStatusAsync()
     {
-        if (_closed || _reading) return;
+        if (_closed || _reading || _sourceActionPending) return;
         _reading = true;
         try
         {
@@ -181,7 +197,8 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (!string.Equals(json, _lastSnapshot, StringComparison.Ordinal))
+            bool changed = !string.Equals(json, _lastSnapshot, StringComparison.Ordinal);
+            if (changed)
             {
                 _lastSnapshot = json;
                 _lastFileChange.Restart();
@@ -189,42 +206,57 @@ public sealed partial class MainWindow : Window
 
             if (_lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
             {
-                ShowUnavailable("Waiting for a fresh NTP update.");
+                ShowUnavailable("NTP data is out of date.");
                 return;
             }
+            if (!changed && _lastUnavailableKey is null)
+                return; // no data change -> no label, brush or clock rebinding
+            _lastUnavailableKey = null;
 
             // The worker writes its snapshot in local PC wall time; the PC may
             // jump by years between two valid replies. Never use updated-UTC
             // subtraction to pronounce a fresh snapshot offline.
             _lastKnownServer = snap.Server;
-            _peerAddress.Text = snap.Server;
+            SetText(_peerAddress, snap.Server);
             var view = StudioStatusPresenter.Create(snap);
             _lastSampleValid = view.ValidReply;
-
-            _syncLamp.Foreground = BrushResolver.Require(this,
+            SetText(_syncState, view.PcSync);
+            SetText(_peerHealth, view.ServerHealth);
+            SetText(_peerStratum, view.Stratum);
+            SetText(_peerOffset, view.ServerOffset);
+            SetText(_peerBroadcast, "—");
+            SetText(_connectionHint, view.Footer);
+            _connectionHint.IsVisible = !string.IsNullOrWhiteSpace(view.Footer);
+            var syncColor = BrushResolver.Require(this,
                 view.Synchronized ? "ArBrush.Success" : "ArBrush.Warning");
-            _syncState.Text = view.PcSync;
-            _syncDetail.Text = view.PcDetail;
-            _peerHealth.Text = view.ServerHealth;
-            _peerHealth.Foreground = BrushResolver.Require(this,
+            if (!ReferenceEquals(_syncLamp.Foreground, syncColor))
+                _syncLamp.Foreground = syncColor;
+            var peerColor = BrushResolver.Require(this,
                 view.ValidReply ? "ArBrush.Success" : "ArBrush.Warning");
-            _peerStratum.Text = view.Stratum;
-            _peerOffset.Text = view.ServerOffset;
-            _peerBroadcast.Text = "—";
-            _connectionHint.Text = view.Footer;
-            _lastReply.Text = "Updated " +
-                snap.UpdatedUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            if (!ReferenceEquals(_peerHealth.Foreground, peerColor))
+                _peerHealth.Foreground = peerColor;
 
-            _baseServerUtc = null;
-            _serverClock.Reset();
             if (view.ValidReply && snap.EstimatedServerUtc is DateTimeOffset server)
             {
-                // Drift since snapshot uses wall-time only for small differences.
+                // Rebase a monotonic clock only for a genuine discontinuity.
+                // Rebinding every 1s NTP status write made seconds stall/jump.
                 double age = (DateTimeOffset.UtcNow - snap.UpdatedUtc).TotalSeconds;
                 if (age is >= 0 and <= 12)
                     server = server.AddSeconds(age);
-                _baseServerUtc = server;
-                _serverClock.Start();
+                DateTimeOffset estimatedNow = _baseServerUtc is DateTimeOffset baseUtc
+                    ? baseUtc + _serverClock.Elapsed
+                    : server;
+                if (_baseServerUtc is null || !_serverClock.IsRunning ||
+                    Math.Abs((server - estimatedNow).TotalSeconds) >= 0.8)
+                {
+                    _baseServerUtc = server;
+                    _serverClock.Restart();
+                }
+            }
+            else
+            {
+                _baseServerUtc = null;
+                _serverClock.Reset();
             }
 
             UpdateHistory(snap);
@@ -282,22 +314,30 @@ public sealed partial class MainWindow : Window
 
     private void ShowUnavailable(string message)
     {
+        string key = (_configuredEnabled ? "on" : "off") + "|" +
+            (_serviceInstalled ? "installed" : "missing") + "|" + message;
+        if (string.Equals(_lastUnavailableKey, key, StringComparison.Ordinal))
+            return; // do not repaint an unchanged failure every second
+        _lastUnavailableKey = key;
         _lastSampleValid = false;
         _baseServerUtc = null;
         _serverClock.Reset();
-        _peerAddress.Text = _lastKnownServer;
-        _syncLamp.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
-        _syncState.Text = _configuredEnabled ? "Not synced"
-            : _serviceInstalled ? "NTP off" : "Not installed";
-        _syncDetail.Text = message;
-        _peerHealth.Text = _configuredEnabled ? "No data" : "Off";
-        _peerHealth.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
-        _peerStratum.Text = "—";
-        _peerOffset.Text = "—";
-        _peerBroadcast.Text = "—";
-        _peerClock.Text = "—";
-        _connectionHint.Text = message;
-        _lastReply.Text = "—";
+        SetText(_peerAddress, _lastKnownServer);
+        SetText(_syncState, _configuredEnabled ? "Not synced"
+            : _serviceInstalled ? "NTP off" : "Not installed");
+        SetText(_peerHealth, _configuredEnabled ? "No data" : "Off");
+        SetText(_peerStratum, "—");
+        SetText(_peerOffset, "—");
+        SetText(_peerBroadcast, "—");
+        SetText(_peerClock, "—");
+        SetText(_connectionHint, message);
+        _connectionHint.IsVisible = true;
+        var stateColor = BrushResolver.Require(this,
+            _configuredEnabled ? "ArBrush.Warning" : "ArBrush.TextDim");
+        if (!ReferenceEquals(_syncLamp.Foreground, stateColor))
+            _syncLamp.Foreground = stateColor;
+        if (!ReferenceEquals(_peerHealth.Foreground, stateColor))
+            _peerHealth.Foreground = stateColor;
     }
 
     private void History_OnClick(object? sender, RoutedEventArgs e)
@@ -322,33 +362,43 @@ public sealed partial class MainWindow : Window
         {
             using var key = Registry.LocalMachine.OpenSubKey(
                 @"SYSTEM\CurrentControlSet\Services\ARFastSNTP");
-            bool exists = key is not null;
-            _serviceInstalled = exists;
-            int startMode = exists ? Convert.ToInt32(key!.GetValue("Start", 3)) : 4;
-            _configuredEnabled = exists && startMode != 4;
-            _sourceToggle.IsEnabled = exists && !_sourceActionPending;
+            bool installed = key is not null;
+            int startMode = installed ? Convert.ToInt32(key!.GetValue("Start", 3)) : 4;
+            bool enabled = installed && startMode != 4;
+            _sourceToggle.IsEnabled = installed && !_sourceActionPending;
+
+            // SCM start type seldom changes. Repaint only at the actual
+            // transition; do not race status-reader results every second.
+            if (_serviceStateKnown && installed == _serviceInstalled &&
+                enabled == _configuredEnabled)
+                return;
+
+            _serviceStateKnown = true;
+            _serviceInstalled = installed;
+            _configuredEnabled = enabled;
+            var green = BrushResolver.Require(this, "ArBrush.Success");
+            var gray = BrushResolver.Require(this, "ArBrush.TextDim");
             _sourceTrack.Background = BrushResolver.Require(this,
-                _configuredEnabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
-            _sourceThumb.HorizontalAlignment = _configuredEnabled
+                enabled ? "ArBrush.Success" : "ArBrush.StrokeStrong");
+            _sourceThumb.HorizontalAlignment = enabled
                 ? Avalonia.Layout.HorizontalAlignment.Right
                 : Avalonia.Layout.HorizontalAlignment.Left;
             _sourceThumb.Fill = BrushResolver.Require(this,
-                _configuredEnabled ? "ArBrush.Canvas" : "ArBrush.Text");
-            ToolTip.SetTip(_sourceToggle, exists
-                ? _configuredEnabled ? "Disable NTP source" : "Enable NTP source"
-                : "Install the NTP service first");
-            _globalLamp.Foreground = BrushResolver.Require(this,
-                _configuredEnabled ? "ArBrush.Success" : "ArBrush.TextDim");
-            _globalStatus.Text = exists
-                ? _configuredEnabled ? "NTP enabled" : "NTP off"
-                : "Service not installed";
-            if (!_configuredEnabled && !_sourceActionPending)
-            {
-                _syncState.Text = exists ? "NTP off" : "Not installed";
-                _syncDetail.Text = exists ? "Enable NTP to receive time"
-                    : "Install AR Fast SNTP to begin";
-                _peerHealth.Text = "Off";
-            }
+                enabled ? "ArBrush.Canvas" : "ArBrush.Text");
+            // Enabled is a configured source, NOT proof the server replied.
+            _serverIcon.Fill = enabled ? green : gray;
+            ToolTip.SetTip(_serverIcon, enabled ? "NTP source enabled" : "NTP source off");
+            ToolTip.SetTip(_sourceToggle, installed
+                ? enabled ? "Turn NTP off" : "Turn NTP on"
+                : "Install AR Fast SNTP first");
+
+            // Invalidate the cache only when the service is toggled.
+            _lastSnapshot = null;
+            _lastUnavailableKey = null;
+            _lastFileChange.Reset();
+            if (!enabled)
+                ShowUnavailable(installed ? "Turn on NTP to sync time."
+                    : "NTP service is not installed.");
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
             or System.Security.SecurityException)
@@ -387,7 +437,7 @@ public sealed partial class MainWindow : Window
                 ? enable ? "NTP enabled" : "NTP disabled"
                 : "Could not change NTP. Check service permissions.";
             _lastSnapshot = null;
-            _ = PollStatusAsync();
+            _lastUnavailableKey = null;
         }
         catch (Win32Exception)
         {
@@ -401,7 +451,11 @@ public sealed partial class MainWindow : Window
         finally
         {
             _sourceActionPending = false;
-            if (!_closed) RefreshServiceState();
+            if (!_closed)
+            {
+                RefreshServiceState();
+                _ = PollStatusAsync();
+            }
         }
     }
 

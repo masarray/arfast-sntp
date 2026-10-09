@@ -41,8 +41,7 @@ internal static class StudioStatusPresenter
                 PcSync: "Not synced",
                 PcDetail: detail,
                 ServerHealth: health,
-                Footer: hint + "  ·  " + snapshot.AcceptedCount + "/" +
-                    snapshot.RequestCount + " valid replies",
+                Footer: hint,
                 ServerOffset: "—",
                 Stratum: "—",
                 ValidReply: false,
@@ -56,10 +55,9 @@ internal static class StudioStatusPresenter
         string subtitle = synced
             ? "From " + host + "  ·  " + offsetText
             : "Difference: " + offsetText + "  ·  " + host;
-        string footer = "NTP replies " + snapshot.AcceptedCount + "/" +
-            snapshot.RequestCount + "  ·  RTT " +
-            (snapshot.RoundTripMilliseconds?.ToString("0.0", CultureInfo.InvariantCulture) ?? "—") +
-            " ms";
+        // Per-second counters and RTT jitter belong in diagnostics, not
+        // the always-visible view; these changes caused distracting flicker.
+        string footer = "";
         return new StudioStatusView(state, subtitle, "Online", footer,
             offsetText, stratum, valid, synced);
     }

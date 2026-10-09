@@ -91,15 +91,25 @@ jobs:
           if (-not $xaml.Contains('HistoryScroll') -or
               -not $xaml.Contains('PeerBroadcast') -or
               -not $xaml.Contains('PcClock') -or
+              -not $xaml.Contains('ServerIcon') -or
               -not $xaml.Contains('SourceTrack') -or
               -not $xaml.Contains('SourceThumb') -or
               -not $xaml.Contains('ToggleSource_OnClick') -or
-              -not $xaml.Contains('PC TIME  ·  LOCAL')) {
-            throw 'Compact NTP monitor lost real switch, local clock or required components'
+              -not $xaml.Contains('Text="PC TIME"') -or
+              -not $xaml.Contains('Width="34" Height="19"')) {
+            throw 'Compact monitor lost small switch, server icon or required sections'
           }
-          if ($xaml.Contains('RowDefinitions="31,34,56,*,Auto"') -or
+          if ($xaml.Contains('GlobalStatus') -or
+              $xaml.Contains('SyncDetail') -or
+              $xaml.Contains('LastReply') -or
               $xaml.Contains('x:Name="SwitchIcon"')) {
-            throw 'Old placeholder-heavy layout returned'
+            throw 'Noisy status fields or oversized/obsolete controls returned'
+          }
+          $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
+          if (-not $viewCode.Contains('_serverIcon.Fill = enabled ? green : gray') -or
+              -not $viewCode.Contains('if (!changed && _lastUnavailableKey is null)') -or
+              -not $viewCode.Contains('if (!string.Equals(target.Text, value')) {
+            throw 'Missing server ON/OFF color, status coalescing or deduplicated text'
           }
           $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
           if (-not $wizard.Contains('Enter NTP Server IP Address') -or

@@ -58,12 +58,23 @@ into the primary Inno installer.
 ## Compact monitor acceptance
 
 A single-source window must be content-sized, not stretch one row into a
-mostly empty table. The top bar describes service configuration, while the
-PC Sync summary describes only verified time status. The NTP table provides
-source health and a readable offset. Its footer gives a helpful explanation
-and accepted/total reply counts, without repeating "No reply" everywhere.
-A real switch toggles the installed source via the elevated service helper;
-the icon reflects the confirmed service state, not a speculative click.
+mostly empty table. The top bar has only the application title and refresh
+control; it does not repeat NTP status. PC Sync displays only the verified
+time status. The table displays source health, offset and estimated time.
+A short actionable footer appears only when there is an issue; request
+counters, RTT jitter and rapidly changing "updated at" text are no longer
+repainted in the always-visible monitor. Status History remains the place
+for diagnostic events.
+
+The 34×19 DIP switch is deliberately smaller than its 40×30 DIP click target.
+The adjacent Material time-server icon becomes green when the NTP source
+is enabled, gray when disabled. This is NOT a claim the remote NTP server
+is reachable: the independent Status column determines that. The source
+switch uses an elevated service helper; the UI never changes system time.
+A 1 Hz coalesced status reader updates unchanged labels zero times, and a
+monotonic estimated server clock is only rebased on actual discontinuities.
+Stale status still triggers future polls so the app recovers when service
+replies resume.
 
 The pure `StudioStatusPresenter` is included in the .NET regression suite,
 which covers verified sync, timeout guidance, large drift, and rejecting a
