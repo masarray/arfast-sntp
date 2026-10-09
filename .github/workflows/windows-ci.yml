@@ -21,7 +21,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Compile
-        run: dotnet build src/ARFastSNTP/ARFastSNTP.csproj -c Release
+        run: dotnet build src/ARFastSNTP/ARFastSNTP.csproj -c Release --warnaserror
       - name: Publish x64
         run: dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
       - name: Upload executable artifact
