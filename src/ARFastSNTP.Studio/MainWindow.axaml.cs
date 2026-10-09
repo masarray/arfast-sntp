@@ -266,9 +266,9 @@ public sealed partial class MainWindow : Window
         if (string.Equals(signature, _lastEventsSignature, StringComparison.Ordinal))
             return;
         _lastEventsSignature = signature;
-        _eventCount.Text = events.Length == 1 ? "1 event" : $"{events.Length} events";
+        _eventCount.Text = events.Count == 1 ? "1 event" : $"{events.Count} events";
         _historyEvents.Children.Clear();
-        if (events.Length == 0)
+        if (events.Count == 0)
         {
             _historyEvents.Children.Add(new TextBlock
             {
