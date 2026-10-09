@@ -67,7 +67,7 @@ internal sealed class SourceControlState : IDisposable
     internal Task WaitUntilChangedAsync(CancellationToken stoppingToken) =>
         _changed.WaitAsync(stoppingToken);
 
-    internal void Dispose() => _changed.Dispose();
+    public void Dispose() => _changed.Dispose();
 
     internal static SourceControlState LoadWindows()
     {

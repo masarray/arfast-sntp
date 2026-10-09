@@ -21,11 +21,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Build worker, regression harness, GUI and setup
+        shell: pwsh
         run: |
-          dotnet build tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --warnaserror
-          dotnet build src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release --warnaserror
-          dotnet build src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --warnaserror
-          dotnet build src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release --warnaserror
+          $projects = @(
+            'tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj',
+            'src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj',
+            'src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj',
+            'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj'
+          )
+          foreach ($project in $projects) {
+            dotnet build $project -c Release --warnaserror
+            if ($LASTEXITCODE -ne 0) {
+              throw "Fail-fast: build failed for $project (exit $LASTEXITCODE)"
+            }
+          }
       - name: SNTP regression and offline setup argument tests
         shell: pwsh
         run: |
