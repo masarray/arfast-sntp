@@ -71,7 +71,7 @@ if (checkOnly)
 }
 
 await Host.CreateDefaultBuilder()
-    .UseWindowsService(service => service.ServiceName = "AR Fast SNTP")
+    .UseWindowsService(service => service.ServiceName = ServiceIdentity.Name)
     .ConfigureServices((_, services) =>
         services.AddHostedService(provider =>
             new SyncWorker(options, provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncWorker>>())))

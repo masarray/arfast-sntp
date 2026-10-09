@@ -48,6 +48,7 @@ using (var gate = new CoalescingGate())
     Check("gate released", await gate.TryEnterAsync(CancellationToken.None));
     gate.Exit();
 }
+Check("canonical service name matches Windows SCM key", ServiceIdentity.Name == "ARFastSNTP");
 Check("status snapshot serializes", StatusSnapshot.Serialize(new StatusSnapshot(
     DateTimeOffset.UtcNow, "192.16.1.175", "Monitor", null, null, null, null))
     .Contains("192.16.1.175", StringComparison.Ordinal));

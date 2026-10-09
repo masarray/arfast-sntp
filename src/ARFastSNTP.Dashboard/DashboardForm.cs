@@ -27,6 +27,8 @@ internal sealed class DashboardForm : Form
 
     private readonly Label _serverClock = new();
     private readonly Label _pcClock = new();
+    private readonly Label _serverDate = new();
+    private readonly Label _pcDate = new();
     private readonly Label _serverLamp = new();
     private readonly Label _responseLamp = new();
     private readonly Label _syncLamp = new();
@@ -92,8 +94,8 @@ internal sealed class DashboardForm : Form
         layout.Controls.Add(_connectionInfo, 0, 2);
         layout.SetColumnSpan(_connectionInfo, 2);
 
-        layout.Controls.Add(ClockPanel("SERVER UTC  ·  ESTIMATED", _serverClock), 0, 3);
-        layout.Controls.Add(ClockPanel("PC UTC", _pcClock), 1, 3);
+        layout.Controls.Add(ClockPanel("SERVER UTC  ·  ESTIMATED", _serverClock, _serverDate), 0, 3);
+        layout.Controls.Add(ClockPanel("PC UTC", _pcClock, _pcDate), 1, 3);
         layout.Controls.Add(LampPanel("SNTP SERVER", _serverLamp), 0, 4);
         layout.Controls.Add(LampPanel("VALID REPLY", _responseLamp), 1, 4);
         layout.Controls.Add(LampPanel("SYNCHRONIZED", _syncLamp), 0, 5);
@@ -112,6 +114,7 @@ internal sealed class DashboardForm : Form
         _serverLamp.Text = _responseLamp.Text = _syncLamp.Text = "● OFFLINE";
         _broadcastLamp.Text = "● UNKNOWN";
         _serverClock.Text = _pcClock.Text = "--:--:--";
+        _serverDate.Text = _pcDate.Text = "—";
         _serverInput.Text = "192.16.1.175";
         LoadPreferences();
 
@@ -126,9 +129,15 @@ internal sealed class DashboardForm : Form
 
         _timer.Tick += (_, _) =>
         {
-            _pcClock.Text = DateTimeOffset.UtcNow.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            DateTimeOffset pcUtc = DateTimeOffset.UtcNow;
+            _pcClock.Text = pcUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            _pcDate.Text = pcUtc.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
             if (_serverEstimate is { } utc)
-                _serverClock.Text = (utc + _estimateTimer.Elapsed).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            {
+                var estimated = utc + _estimateTimer.Elapsed;
+                _serverClock.Text = estimated.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+                _serverDate.Text = estimated.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
+            }
             if (++_refreshTick % 4 == 0) RefreshStatus();
         };
         _timer.Start();
@@ -365,56 +374,49 @@ internal sealed class DashboardForm : Form
         if (certification)
         {
             var answer = MessageBox.Show(this,
-                "LAB CERTIFICATION ONLY.\n\n" +
-                "This will ENABLE Windows clock corrections, including jumps of YEARS.\n" +
-                "It can invalidate SCADA SOE and historian timestamps.\n\n" +
-                "Only continue if this is a dedicated ISOLATED test PC,\n" +
-                "with other clock-setting services disabled by an authorized operator.\n\n" +
-                "Continue with installation?",
-                "Danger: enable clock stepping", MessageBoxButtons.YesNo,
+                "ISOLATED CERTIFICATION PC ONLY.\n\n" +
+                "Clock correction can jump Windows time by YEARS and invalidate SCADA " +
+                "SOE / historian timestamps.\n\n" +
+                "The setup utility will require a second explicit lab confirmation.\n\n" +
+                "Open LAB setup?",
+                "Warning: isolated lab clock correction", MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
             if (answer != DialogResult.Yes) return;
         }
-        string script = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "install.ps1"));
-        string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-            "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-        if (!File.Exists(script))
+
+        string setup = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+            "..", "ARFastSNTP.Setup.exe"));
+        if (!File.Exists(setup))
         {
             MessageBox.Show(this,
-                "Installer script not found. Run this dashboard from the EXTRACTED GitHub artifact, " +
-                "not a folder copied without install.ps1.\n\nCONNECT will work without an installer.",
+                "New standalone C# setup is missing.\n" +
+                "Download and extract the complete CI artifact ZIP, retaining " +
+                "ARFastSNTP.Setup.exe alongside worker/ and dashboard/.\n\n" +
+                "CONNECT still works without installing anything.",
                 "Installer not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        if (!File.Exists(ps))
-        {
-            MessageBox.Show(this,
-                "Windows PowerShell is unavailable at its normal system path.\n" +
-                "CONNECT monitoring does not require PowerShell.\n" +
-                "Ask your Windows administrator to enable the built-in installer dependency.",
-                "Windows PowerShell unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
-        StopPortable(false); // Do not create two workers for the same peer while installing a service.
+        StopPortable(false); // Prevent parallel portable monitor while the service starts.
         try
         {
-            var start = new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
-                FileName = ps,
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" " +
-                    $"-Server {server} -ServerYear {(int)_yearInput.Value}" +
-                    (certification ? " -CertificationStep -AcceptLabRisk" : ""),
-                WorkingDirectory = Path.GetDirectoryName(script)!,
-                Verb = "runas", UseShellExecute = true
+                FileName = setup, WorkingDirectory = Path.GetDirectoryName(setup)!,
+                UseShellExecute = true, Verb = "runas"
             };
-            using var process = Process.Start(start);
-            _status.Text = $"Service installation requested for {server}. Wait for Windows approval.";
-            _connectionInfo.Text = "Service setup: Windows Administrator approval required";
+            startInfo.ArgumentList.Add("--server");
+            startInfo.ArgumentList.Add(server.ToString());
+            startInfo.ArgumentList.Add("--year");
+            startInfo.ArgumentList.Add(((int)_yearInput.Value).ToString(CultureInfo.InvariantCulture));
+            if (certification) startInfo.ArgumentList.Add("--lab");
+            using var process = Process.Start(startInfo);
+            _status.Text = "Setup window opened. Review service mode and click INSTALL SERVICE there.";
+            _connectionInfo.Text = "The C# setup window displays install errors and persistent log; no PowerShell.";
         }
-        catch (System.ComponentModel.Win32Exception ex)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show(this, ex.Message, "Installation cancelled or blocked",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, ex.Message, "Cannot open Windows setup",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -426,21 +428,27 @@ internal sealed class DashboardForm : Form
         BackColor = Color.Transparent
     };
 
-    private static Control ClockPanel(string title, Label clock)
+    private static Control ClockPanel(string title, Label clock, Label date)
     {
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, BackColor = PanelColor,
-            ColumnCount = 1, RowCount = 2, Margin = new Padding(3)
+            ColumnCount = 1, RowCount = 3, Margin = new Padding(3)
         };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
         panel.Controls.Add(MakeLabel("    " + title, 9, Color.LightGray), 0, 0);
         clock.Dock = DockStyle.Fill;
         clock.TextAlign = ContentAlignment.MiddleCenter;
-        clock.Font = new Font("Consolas", 26, FontStyle.Bold);
+        clock.Font = new Font("Consolas", 23, FontStyle.Bold);
         clock.ForeColor = Color.White;
         panel.Controls.Add(clock, 0, 1);
+        date.Dock = DockStyle.Fill;
+        date.TextAlign = ContentAlignment.MiddleCenter;
+        date.Font = new Font("Segoe UI", 9);
+        date.ForeColor = Color.LightGray;
+        panel.Controls.Add(date, 0, 2);
         return panel;
     }
 
@@ -473,6 +481,7 @@ internal sealed class DashboardForm : Form
         _status.Text = reason;
         _serverEstimate = null;
         _serverClock.Text = "--:--:--";
+        _serverDate.Text = "—";
         SetLamp(_serverLamp, false, "ONLINE");
         SetLamp(_responseLamp, false, "VALID");
         SetLamp(_syncLamp, false, "SYNCED");
@@ -544,7 +553,20 @@ internal sealed class DashboardForm : Form
             bool synced = snapshot.IsSynchronized(now);
             SetLamp(_serverLamp, valid, "ONLINE");
             SetLamp(_responseLamp, valid, "VALID");
-            SetLamp(_syncLamp, synced, "SYNCED");
+            if (synced)
+            {
+                _syncLamp.Text = "● SYNCED";
+                _syncLamp.ForeColor = Color.LightGreen;
+            }
+            else if (valid)
+            {
+                _syncLamp.Text = "● OFFSET";
+                _syncLamp.ForeColor = Color.FromArgb(255, 188, 105);
+            }
+            else
+            {
+                SetLamp(_syncLamp, false, "SYNCED");
+            }
             _broadcastLamp.Text = "● UNKNOWN";
             _broadcastLamp.ForeColor = Color.Silver;
 
@@ -557,6 +579,11 @@ internal sealed class DashboardForm : Form
                 : "—";
             string rtt = valid && snapshot.RoundTripMilliseconds is double rttValue
                 ? rttValue.ToString("0.0", CultureInfo.InvariantCulture) + " ms" : "—";
+            if (valid && snapshot.OffsetMilliseconds is double big &&
+                Math.Abs(big) >= TimeSpan.FromDays(365).TotalMilliseconds)
+            {
+                offset += $" (~{Math.Abs(big) / TimeSpan.FromDays(365.2425).TotalMilliseconds:0.0} years)";
+            }
             _statistics.Text = $"Requests {snapshot.RequestCount}   |   " +
                 $"Accepted {snapshot.AcceptedCount}   |   " +
                 $"Rejected {snapshot.RejectedCount}   |   Offset {offset}   |   RTT {rtt}";
@@ -576,6 +603,7 @@ internal sealed class DashboardForm : Form
             {
                 _serverEstimate = null;
                 _serverClock.Text = "--:--:--";
+                _serverDate.Text = "—";
             }
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException

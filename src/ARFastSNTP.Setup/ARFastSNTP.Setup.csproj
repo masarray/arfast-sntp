@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>ARFastSNTP.Setup</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../ARFastSNTP/ServiceIdentity.cs" Link="ServiceIdentity.cs" />
+  </ItemGroup>
+</Project>

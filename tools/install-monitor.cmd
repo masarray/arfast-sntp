@@ -1,18 +1,16 @@
 @echo off
 setlocal
-echo AR Fast SNTP - MONITOR ONLY installer
-echo This service monitors SNTP but will NOT adjust Windows time.
-set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-if not exist "%PS_EXE%" (
-  echo ERROR: Windows PowerShell not found at the standard Windows path.
-  echo You can still open dashboard\ARFastSNTP.Dashboard.exe and use CONNECT.
+set "SETUP=%~dp0ARFastSNTP.Setup.exe"
+if not exist "%SETUP%" (
+  echo ERROR: ARFastSNTP.Setup.exe was not found beside this script.
+  echo Download the latest successful Windows artifact and extract all files.
   pause
   exit /b 2
 )
-"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*
-set "RESULT=%ERRORLEVEL%"
-if not "%RESULT%"=="0" (
-  echo Installation failed or was cancelled. Check the error above.
+start "" "%SETUP%" --server 192.16.1.175 --year 2026
+if errorlevel 1 (
+  echo ERROR: Windows blocked the graphical installer.
   pause
+  exit /b 1
 )
-exit /b %RESULT%
+exit /b 0
