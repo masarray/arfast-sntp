@@ -7,6 +7,47 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Inno uses one visible wizard. These commands are silent, headless and
+        // return machine-readable exit codes; output is saved to setup.log.
+        if (args.Length >= 1 && args[0].StartsWith("--inno-", StringComparison.Ordinal))
+        {
+            try
+            {
+                string command = args[0];
+                if (command == "--inno-self-test")
+                {
+                    Environment.ExitCode = InnoLifecycle.SelfTest() ? 0 : 3;
+                    return;
+                }
+                var config = SetupArguments.Parse(args.Skip(1).ToArray());
+                Action<string> log = InstallerOperations.PersistLog;
+                switch (command)
+                {
+                    case "--inno-prepare":
+                        InnoLifecycle.Prepare(log);
+                        break;
+                    case "--inno-activate":
+                        InnoLifecycle.Activate(config, log);
+                        break;
+                    case "--inno-remove":
+                        InnoLifecycle.Uninstall(log);
+                        break;
+                    case "--inno-abort":
+                        InnoLifecycle.Abort(log);
+                        break;
+                    default:
+                        throw new ArgumentException("Unsupported Inno service operation.");
+                }
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex)
+            {
+                InstallerOperations.PersistLog("Inno service operation failed: " + ex);
+                Environment.ExitCode = 5;
+            }
+            return;
+        }
+
         // Does not launch a window, require elevation, register services, or use the network.
         if (args.Length == 1 && args[0] == "--self-test")
         {

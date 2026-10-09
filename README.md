@@ -1,5 +1,31 @@
 # AR Fast SNTP — Install, Sync, Monitor
 
+**License: GPL-2.0-or-later.** Full text: [LICENSE](LICENSE).
+
+## Windows Inno smart installer (candidate)
+
+The Windows CI now builds `ARFastSNTP-Setup-Windows-x64.exe`. The
+single Inno Setup wizard configures trusted SNTP IP and NTP reference
+year, installs or upgrades the Windows Service, verifies RUNNING,
+and offers to open Avalonia Studio. Closing Studio does not stop sync.
+
+Upgrades detect the owned service and preserve its IP/year. Before
+replacing binaries, setup saves the previous executable and service
+configuration for automatic recovery if installation is interrupted or
+activation fails. Existing ProgramData logs and correction history remain.
+
+Inno requires **one Windows Administrator approval**, with no
+PowerShell or separate graphical setup. For silent installations on
+authorized isolated test PCs:
+`ARFastSNTP-Setup-Windows-x64.exe /VERYSILENT /SERVER=192.16.1.175 /YEAR=2026`.
+Use `/LABSYNC=0` for diagnostic monitor-only mode.
+
+**Important:** default sync mode is for an approved isolated certification
+PC; do not deploy on active SCADA/SOE/historian systems. Real upgrade and
+rollback acceptance tests are still pending.
+
+
+
 ## Windows-only Avalonia Studio preview
 
 The new `src/ARFastSNTP.Studio` is a Windows Avalonia shell using pinned

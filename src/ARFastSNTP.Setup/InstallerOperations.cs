@@ -46,7 +46,7 @@ internal static class InstallerOperations
         }
     }
 
-    private static void EnsureServiceControlAvailable()
+    internal static void EnsureServiceControlAvailable()
     {
         if (!File.Exists(ScExe))
             throw new FileNotFoundException("Windows Service Control utility missing: " + ScExe, ScExe);
@@ -80,14 +80,14 @@ internal static class InstallerOperations
         !IsOwnedImage(image) ? "UNKNOWN / UNOWNED" :
         ImageHasLabMode(image) ? "LAB CLOCK CORRECTION" : "MONITOR ONLY";
 
-    private static bool IsServiceRunning()
+    internal static bool IsServiceRunning()
     {
         var state = RunSc(new[] { "query", ServiceName }, false, _ => { });
         return state.ExitCode == 0 &&
             Regex.IsMatch(state.Output, @"\bSTATE\s*:\s*4\b", RegexOptions.IgnoreCase);
     }
 
-    private static bool WaitForState(int number, int timeoutMs = 12000)
+    internal static bool WaitForState(int number, int timeoutMs = 12000)
     {
         var timer = Stopwatch.StartNew();
         while (timer.ElapsedMilliseconds < timeoutMs)
@@ -380,11 +380,11 @@ internal static class InstallerOperations
         }
     }
 
-    private static (int ExitCode, string Output) RunSc(
+    internal static (int ExitCode, string Output) RunSc(
         string[] arguments, bool mustSucceed, Action<string> report) =>
         RunProcess(ScExe, arguments, mustSucceed, report);
 
-    private static (int ExitCode, string Output) RunProcess(
+    internal static (int ExitCode, string Output) RunProcess(
         string executable, string[] arguments, bool mustSucceed, Action<string> report)
     {
         var start = new ProcessStartInfo

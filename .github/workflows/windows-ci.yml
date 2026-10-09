@@ -2,9 +2,9 @@ name: Windows CI
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'tests/**', 'tools/**', '.github/workflows/windows-ci.yml']
+    paths: ['src/**', 'tests/**', 'installer/**', 'tools/**', 'LICENSE', 'NOTICE', '.github/workflows/windows-ci.yml']
   pull_request:
-    paths: ['src/**', 'tests/**', 'tools/**', '.github/workflows/windows-ci.yml']
+    paths: ['src/**', 'tests/**', 'installer/**', 'tools/**', 'LICENSE', 'NOTICE', '.github/workflows/windows-ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,6 +33,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SNTP regression test failed' }
           dotnet run --project src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --no-build -- --self-test
           if ($LASTEXITCODE -ne 0) { throw 'Graphical setup argument test failed' }
+          dotnet run --project src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --no-build -- --inno-self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Inno service lifecycle self-test failed' }
       - name: Worker no-network preflight and lifecycle smoke test
         shell: pwsh
         run: |
@@ -112,10 +114,31 @@ jobs:
             Get-ChildItem publish -Recurse | Select-Object FullName,Length | Out-String | Write-Host
             throw "Offline Windows bundle verification failed (exit $($verify.ExitCode))"
           }
-      - name: Upload Windows artifact (one per PR batch)
+      - name: Compile standalone Inno Setup wizard
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --version=6.4.0 -y --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler installation failed' }
+          }
+          if (-not (Test-Path $compiler)) { throw "ISCC compiler is missing: $compiler" }
+          & $compiler '/Qp' 'installer/ARFastSNTP.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno compiler failed ($LASTEXITCODE)" }
+          $installer = 'installer-out/ARFastSNTP-Setup-Windows-x64.exe'
+          if (-not (Test-Path $installer)) { throw 'Installer executable is missing' }
+          $bytes = (Get-Item $installer).Length
+          if ($bytes -lt 1000000) { throw "Suspiciously small installer: $bytes bytes" }
+          Write-Host "Inno Setup compiled: $installer ($bytes bytes)"
+
+      - name: Upload single Windows setup executable
         uses: actions/upload-artifact@v4
         with:
-          name: ARFastSNTP-Windows-x64
-          path: publish/
+          name: ARFastSNTP-Inno-Windows-x64
+          path: |
+            installer-out/ARFastSNTP-Setup-Windows-x64.exe
+            LICENSE
+            NOTICE
+            docs/START-HERE.txt
           if-no-files-found: error
           retention-days: 14

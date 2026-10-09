@@ -39,7 +39,7 @@ and C# service setup are retained as fallbacks during the migration.
 - Explicitly distinguish unicast server timestamps from broadcast traffic.
   Broadcast remains "not measured" until a dedicated listener exists.
 
-## P10 — Inno Setup smart Windows installer
+## P10 — Inno Setup smart Windows installer (code ready for CI; field validation pending)
 
 - Replace multiple setup windows and PowerShell/CMD UX with one Inno
   `ARFastSNTP-Setup.exe`, using Administrator approval once.

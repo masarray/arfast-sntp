@@ -17,8 +17,10 @@ Upstream arssyut LICENSE: **GPL-2.0-or-later**. A copy is stored in
 `third_party/ARSSYUT-GPL-2.0-OR-LATER.txt`, and included in the Windows CI
 artifact. Reuse/distribution must satisfy the applicable upstream license
 obligations or be separately authorized by the relevant copyright holder(s).
-This document does not claim that the arintp project has received an
-alternative license. Public release licensing must be reviewed first.
+AR Fast SNTP now adopts **GPL-2.0-or-later**, matching the license
+of the reused Arssyut design resources. The top-level `LICENSE`
+contains the complete GPL text. Avalonia and Inter retain their
+respective independent third-party license obligations.
 
 Upstream UI package baseline from Arssyut:
 - Avalonia.Desktop 12.1.3 (MIT)
