@@ -15,7 +15,7 @@
           <Path Width="24" Height="24" Stretch="Uniform"
                 Data="M12 8v4l3 2 M12 22a10 10 0 1 0 0-20a10 10 0 0 0 0 20z"
                 Stroke="{DynamicResource ArBrush.Success}" StrokeThickness="1.8"
-                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+                StrokeLineCap="Round"/>
         </Viewbox>
         <TextBlock Classes="section" Text="AR Fast SNTP" VerticalAlignment="Center"/>
       </StackPanel>
@@ -33,7 +33,7 @@
           <Path Width="24" Height="24" Stretch="Uniform"
                 Data="M20 11a8 8 0 0 0-14.5-5.5L3 8 M3 3v5h5 M4 13a8 8 0 0 0 14.5 5.5L21 16 M21 21v-5h-5"
                 Stroke="{DynamicResource ArBrush.Text}" StrokeThickness="1.8"
-                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+                StrokeLineCap="Round"/>
         </Viewbox>
       </Button>
     </Grid>
@@ -99,7 +99,7 @@
                 <Path Width="24" Height="24" Stretch="Uniform"
                       Data="M4 4h16v6H4z M4 14h16v6H4z M8 7h.01 M8 17h.01"
                       Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.75"
-                      StrokeLineCap="Round" StrokeLineJoin="Round"/>
+                      StrokeLineCap="Round"/>
               </Viewbox>
               <TextBlock x:Name="PeerAddress" Text="—" FontWeight="SemiBold"
                          TextTrimming="CharacterEllipsis"/>
@@ -138,7 +138,7 @@
               <Path x:Name="HistoryChevron" Width="24" Height="24"
                     Stretch="Uniform" Data="M9 18l6-6-6-6"
                     Stroke="{DynamicResource ArBrush.TextSecondary}"
-                    StrokeThickness="2" StrokeLineCap="Round" StrokeLineJoin="Round"/>
+                    StrokeThickness="2" StrokeLineCap="Round"/>
             </Viewbox>
             <TextBlock Grid.Column="1" Text="Status history"
                        VerticalAlignment="Center" FontWeight="SemiBold"/>
