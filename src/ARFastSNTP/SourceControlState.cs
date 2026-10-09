@@ -78,6 +78,9 @@ internal sealed class SourceControlState : IDisposable
         bool initial = (key?.GetValue(SourceControlProtocol.SettingName) as int?) != 0;
         return new SourceControlState(initial, value =>
         {
+            // Platform analyzer treats this callback as independently callable.
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException("NTP source settings require Windows.");
             // Service identity should be LocalSystem. No elevated GUI executable
             // is ever launched merely to change this trusted source flag.
             using var writable = Registry.LocalMachine.CreateSubKey(
