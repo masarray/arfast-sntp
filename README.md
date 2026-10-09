@@ -1,94 +1,71 @@
-# AR Fast SNTP — Windows SNTP Monitor and Lab Clock Service
+# AR Fast SNTP — Install, Sync, Monitor
 
-A lightweight **C# .NET 8** SNTP worker + live dashboard + GUI Windows Service installer.
+Native .NET 8 Windows Service + lightweight WinForms live monitor.
 
-**OT safety:** forced clock steps are for approved, **isolated certification PCs only**.
-Never change the clock of a production SCADA/SOE/historian computer with this test tool.
-Unicast NTP is unauthenticated; use a trusted isolated source/network.
+**Primary flow: INSTALL & SYNC → Windows Service RUNNING → dashboard monitors.**
+No uninstall/reinstall to change from Monitor Only to clock synchronization.
+The installer updates an existing ARFastSNTP service **in place**.
 
-## 1. Test SNTP (no installer needed)
+> Clock adjustment can jump the PC date by years. Use the clock-sync mode
+> only on an administrator-approved **isolated certification test PC**, not
+> a production SCADA/SOE/historian system. NTPv4 unicast does not authenticate
+> the time source; use your verified trusted GPS LAN.
 
-1. Download the latest **successful** [Windows Actions artifact](https://github.com/masarray/arintp/actions), `ARFastSNTP-Windows-x64`. Extract the **whole ZIP**.
-2. Launch `dashboard/ARFastSNTP.Dashboard.exe` (not the worker executable).
-3. Type **SERVER IP** (default `192.16.1.175`), choose **YEAR** (NTP-era reference, e.g. 2026), click **CONNECT**.
-4. Watch **SNTP SERVER ONLINE**, **VALID REPLY**, server **UTC time + date**, PC **UTC time + date**, offset, RTT, counts and last correction event.
-5. STOP stops only the temporary child monitor worker. The portable monitor **does not change Windows time**.
+## Quick start
 
-A valid SNTP reply does not imply the PC is synchronized. A huge offset such as
-`+1,018,249,956,697 ms` means **about 32 years** difference between PC and NTP server.
-The dashboard will show `OFFSET` (amber) instead of misleading `OFFLINE`.
+1. Download `ARFastSNTP-Windows-x64` from the [latest successful Windows CI](https://github.com/masarray/arintp/actions).
+   Extract **all** files to a new folder, not directly from inside the ZIP.
+2. Open `dashboard/ARFastSNTP.Dashboard.exe`.
+3. Enter your NTP/GPS server IP (default `192.16.1.175`) and year reference (`2026`).
+4. Click **INSTALL & SYNC**, approve **one Windows Administrator/UAC prompt**.
+   The setup starts automatically, installing the service if absent or
+   updating the already-installed monitor service to clock-sync mode.
+5. Once the setup reports **RUNNING / LAB CLOCK CORRECTION**, use the dashboard
+   to watch SNTP replies, server/PC UTC times and dates, offset, RTT and correction events.
+   The green synchronized lamp only follows a **fresh verified SNTP measurement**.
 
-**Broadcast** is marked UNKNOWN: ordinary SNTP request/reply does not verify
-server broadcast/multicast operation.
+Standalone installation: double-click `ARFastSNTP.Setup.exe`, then **INSTALL & SYNC**.
+Or run `install-sync.cmd` for the same configuration. No PowerShell required.
+The separate `install-monitor.cmd` is an **optional diagnostic monitor-only** mode.
 
-## 2. Install a persistent Windows Service without PowerShell
+### Already installed Monitor Only?
 
-The newest ZIP contains **`ARFastSNTP.Setup.exe`** at the root.
-This is the canonical Windows graphical setup; the legacy PowerShell scripts
-are **not included in the release bundle**.
+There is no need to remove it. Just use **INSTALL & SYNC** with the desired
+server IP; setup stops the owned service, updates its SCM ImagePath, restarts,
+and verifies that it is running. If a configuration change fails, the setup
+tries to restore the previous mode and shows the exact error.
 
-Either click **INSTALL SERVICE** from the dashboard, or double-click
-`install-monitor.cmd`. The setup shows the server IP, reference year, install
-mode, existing service status, **INSTALL SERVICE / REMOVE SERVICE**, and a
-visible error log. Approve the Windows UAC Administrator prompt.
+### Dashboard CONNECT vs INSTALL & SYNC
 
-- **Monitor only** (default): Windows Service runs at startup and continues with
-  the dashboard closed; **never** sets the Windows clock.
-- **Isolated Lab**: explicit acknowledgement, UAC Administrator permission,
-  and a final confirmation are required. With this mode enabled, only the
-  service (not the dashboard) can correct Windows time after 3 coherent samples.
-  It refuses to enable correction if known competing time-setting services such
-  as W32Time or Meinberg NTP are running.
-- Existing service installation is never silently overwritten. Use the setup
-  **REMOVE SERVICE** button before switching server IP, year or correction mode.
-- Service executable is copied to `%ProgramFiles%\ARFastSNTP\worker\` and
-  dashboard to `%ProgramFiles%\ARFastSNTP\dashboard\`.
-- The installer registers the automatic-start service via Windows **sc.exe**
-  (Windows SCM), not via PowerShell. Installer errors and commands are shown
-  in the setup window and saved in `%ProgramData%\ARFastSNTP\setup.log`.
-  Correction-event and status history are preserved when uninstalling.
+**CONNECT** creates a temporary unprivileged *monitor* process; it never
+changes Windows time. **INSTALL & SYNC** starts/updates the persistent
+Windows Service with time correction enabled. The dashboard is read-only;
+the worker owns corrections and runs after the GUI closes or Windows reboots.
 
-**PowerShell scripts from older artifact ZIPs will still fail in locked-down
-environments. Use the latest artifact and the new `ARFastSNTP.Setup.exe`.**
+### Reliability notes
 
-## 3. Lab test steps
+- First suspicious offsets require three coherent NTP request/reply samples.
+- Stable connections use adaptive low-rate polling, a monotonic step cooldown,
+  and bounded recovery/backoff for errors and NTP KoD codes.
+- A bounded 16-event ring and atomic JSON status snapshots prevent unbounded
+  memory growth. Only the service modifies Windows time.
+- Broadcast is UNKNOWN unless a separate broadcast receiver is implemented.
+- The server clock in the dashboard is an **estimated** UTC time, not a
+  separate authenticated GPS reference.
+- If another time-setting service (e.g. W32Time/Meinberg) is running, setup
+  **warns** about the conflict but never secretly stops it. Arrange test-PC
+  time-service ownership under your normal maintenance procedure.
+- Windows setup diagnostics: `%ProgramData%\ARFastSNTP\setup.log`.
+- Run `uninstall.cmd` or use the setup's **REMOVE SERVICE** control to remove.
+  Existing correction/status evidence in ProgramData is retained.
 
-On a disposable, physically isolated Windows PC:
-1. Verify NTP/GPS server time and UTC independently.
-2. Confirm and resolve other clock-setting services **manually** (the installer
-   never shuts down Windows Time or Meinberg for you).
-3. Open **LAB CLOCK STEP** in the dashboard or `install-certification-lab.cmd`,
-   explicitly confirm isolation and approve elevation.
-4. In setup, select lab mode, check the lab confirmation, click INSTALL SERVICE.
-5. Confirm the setup reports **RUNNING**, close setup and reopen the dashboard.
-   Its status comes from the service when not connected in portable mode.
-6. Move test PC clock to a different date; verify the SNTP-offset changes,
-   correction event, and then post-correction valid reply and synchronized lamp.
-7. Restore approved time policy before connecting any test equipment to SCADA.
+## Development status
 
-Detailed lab acceptance procedure: [LAB-ACCEPTANCE.md](docs/LAB-ACCEPTANCE.md).
+GitHub CI compiles worker, dashboard, graphical setup, deterministic SNTP
+regressions and worker lifecycle; it does not step the CI runner's clock.
+Actual GPS communication, Windows Service reconfiguration and time correction
+still require acceptance testing on the authorized test PC. No automatic merge
+to main or production deployment.
 
-## Engineering and limits
-
-- One serial async worker per active instance, bounded correction history (16)
-  and atomic status snapshots. No background polling from the GUI.
-- Stable polling ~3 seconds; suspicious offsets checked with 3 independent
-  samples; adaptive retry/backoff for NTP KoD and failures.
-- NTP epoch handling references an **operator-configured server year**, not
-  the potentially incorrect local PC clock. Not a substitute for authenticated NTP.
-- Synchronization and huge jumps remain **unverified on real GPS hardware**.
-- The installer is an inspectable C# executable, not a signed MSI. No automatic
-  production deployment or merge to `main` without acceptance testing.
-
-### Developer verification
-
-```text
-dotnet build tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release
-dotnet build src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release
-dotnet build src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release
-dotnet run --project tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release
-```
-
-GitHub CI also runs a no-network/no-clock-change worker lifecycle check,
-a native setup argument self-test, and a packaged ZIP layout check.
-**No CI test installs a service or changes the GitHub runner system clock.**
+[Acceptance procedure](docs/LAB-ACCEPTANCE.md) ·
+[Windows Actions](https://github.com/masarray/arintp/actions)

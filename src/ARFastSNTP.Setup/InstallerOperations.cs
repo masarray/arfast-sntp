@@ -59,31 +59,184 @@ internal static class InstallerOperations
         return key?.GetValue("ImagePath") as string;
     }
 
+    /// <summary>Only reconfigure the explicitly owned ARFastSNTP service.</summary>
+    internal static bool IsOwnedImage(string image) =>
+        image.StartsWith("\"" + InstalledWorker + "\"",
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static string BuildImagePath(SetupArguments configuration)
+    {
+        string flags = $"--server {configuration.Server} --server-year {configuration.ServerYear}";
+        if (configuration.Lab) flags += " --certification-mode --allow-step";
+        return "\"" + InstalledWorker + "\" " + flags;
+    }
+
+    internal static bool ImageHasLabMode(string image) =>
+        IsOwnedImage(image) &&
+        image.Contains("--certification-mode --allow-step", StringComparison.Ordinal);
+
+    internal static string ServiceModeLabel(string? image) =>
+        image is null ? "NOT INSTALLED" :
+        !IsOwnedImage(image) ? "UNKNOWN / UNOWNED" :
+        ImageHasLabMode(image) ? "LAB CLOCK CORRECTION" : "MONITOR ONLY";
+
+    private static bool IsServiceRunning()
+    {
+        var state = RunSc(new[] { "query", ServiceName }, false, _ => { });
+        return state.ExitCode == 0 &&
+            Regex.IsMatch(state.Output, @"\bSTATE\s*:\s*4\b", RegexOptions.IgnoreCase);
+    }
+
+    private static bool WaitForState(int number, int timeoutMs = 12000)
+    {
+        var timer = Stopwatch.StartNew();
+        while (timer.ElapsedMilliseconds < timeoutMs)
+        {
+            var state = RunSc(new[] { "query", ServiceName }, false, _ => { });
+            if (state.ExitCode == 0 &&
+                Regex.IsMatch(state.Output,
+                    @"\bSTATE\s*:\s*" + number + @"\b", RegexOptions.IgnoreCase))
+                return true;
+            Thread.Sleep(250);
+        }
+        return false;
+    }
+
+    private static void WarnCompetingTimeServices(Action<string> report)
+    {
+        foreach (string name in new[] { "W32Time", "NTP", "ntpd", "ntpdssl-sag" })
+        {
+            var peer = RunSc(new[] { "query", name }, false, _ => { });
+            if (peer.ExitCode == 0 &&
+                Regex.IsMatch(peer.Output, @"\bSTATE\s*:\s*4\b", RegexOptions.IgnoreCase))
+                report($"WARNING: {name} is running and may compete with LAB clock correction. " +
+                    "No other service has been stopped or modified.");
+        }
+    }
+
+    private static void ChangeMode(SetupArguments configuration,
+        string previousImage, Action<string> report)
+    {
+        if (!IsOwnedImage(previousImage))
+            throw new InvalidOperationException(
+                "Existing service is not owned by this application. No changes made.");
+        if (!File.Exists(InstalledWorker))
+            throw new FileNotFoundException(
+                "Registered service worker is missing; cannot change mode safely.", InstalledWorker);
+
+        string requested = BuildImagePath(configuration);
+        if (string.Equals(previousImage, requested, StringComparison.OrdinalIgnoreCase))
+        {
+            // Idempotency must still satisfy INSTALL & SYNC if an old service
+            // was configured correctly but had been manually stopped.
+            if (!IsServiceRunning())
+            {
+                report("Service already configured; starting it...");
+                RunSc(new[] { "start", ServiceName }, true, report);
+                if (!WaitForState(4))
+                    throw new TimeoutException("Service did not reach RUNNING.");
+            }
+            report("SUCCESS: existing service is RUNNING; mode " +
+                ServiceModeLabel(previousImage) + ".");
+            report("Clock correction is verified only after a fresh SNTP sample.");
+            return;
+        }
+
+        report("Updating EXISTING service in place; no uninstall, no file copy.");
+        if (configuration.Lab) WarnCompetingTimeServices(report);
+
+        // Verify new flags using the exact installed worker before stopping it.
+        var args = new List<string> { "--server", configuration.Server.ToString(),
+            "--server-year", configuration.ServerYear.ToString(), "--check-config" };
+        if (configuration.Lab)
+        {
+            args.Add("--certification-mode");
+            args.Add("--allow-step");
+        }
+        RunProcess(InstalledWorker, args.ToArray(), mustSucceed: true, report);
+
+        bool wasRunning = IsServiceRunning();
+        bool configChanged = false;
+        try
+        {
+            if (wasRunning)
+            {
+                report("Stopping existing ARFastSNTP service...");
+                RunSc(new[] { "stop", ServiceName }, true, report);
+                if (!WaitForState(1))
+                    throw new TimeoutException("Existing service did not STOP; its configuration was not changed.");
+            }
+            report("Applying " + (configuration.Lab ? "LAB CLOCK CORRECTION" : "MONITOR ONLY") + "...");
+            RunSc(new[] { "config", ServiceName, "binPath=", requested, "start=", "auto" },
+                true, report);
+            configChanged = true;
+            RunSc(new[] { "start", ServiceName }, true, report);
+            if (!WaitForState(4))
+                throw new TimeoutException("Service did not reach RUNNING after mode change.");
+
+            string actual = ExistingServiceImage() ?? "";
+            if (!string.Equals(actual, requested, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("SCM ImagePath differs from requested configuration.");
+            report("SUCCESS: existing service RUNNING in " + ServiceModeLabel(actual) + " mode.");
+            report("Configured server: " + configuration.Server + ":123");
+            report("No uninstall/reinstall was required; synchronizing via SNTP worker.");
+        }
+        catch (Exception ex)
+        {
+            report("UPDATE FAILED: " + ex.Message);
+            if (configChanged)
+            {
+                report("Rolling back service configuration to previous mode...");
+                try
+                {
+                    if (IsServiceRunning())
+                    {
+                        RunSc(new[] { "stop", ServiceName }, false, report);
+                        WaitForState(1);
+                    }
+                    RunSc(new[] { "config", ServiceName, "binPath=", previousImage,
+                        "start=", "auto" }, true, report);
+                    if (wasRunning)
+                    {
+                        RunSc(new[] { "start", ServiceName }, true, report);
+                        if (!WaitForState(4))
+                            report("WARNING: previous service configuration restored, but could not verify RUNNING.");
+                    }
+                    report("Previous configuration restored.");
+                }
+                catch (Exception rollbackError)
+                {
+                    report("ROLLBACK FAILED: " + rollbackError.Message);
+                }
+            }
+            else if (wasRunning && !IsServiceRunning())
+            {
+                // A stop succeeded but update did not. Restart the original service.
+                try { RunSc(new[] { "start", ServiceName }, true, report); }
+                catch (Exception restartError)
+                { report("Failed to restart original service: " + restartError.Message); }
+            }
+            throw;
+        }
+    }
+
     internal static void Install(SetupArguments configuration, string bundle, Action<string> report)
     {
         if (!IsAdministrator()) throw new UnauthorizedAccessException("Administrator privileges required.");
-        ValidateBundle(bundle);
         EnsureServiceControlAvailable();
-        if (ExistingServiceImage() is not null)
-            throw new InvalidOperationException(
-                "Service ARFastSNTP is already registered. Click REMOVE SERVICE first; existing settings were preserved.");
+        string? previousImage = ExistingServiceImage();
+        if (previousImage is not null)
+        {
+            // Canonical idempotent setup: changing MONITOR -> LAB is an UPDATE.
+            ChangeMode(configuration, previousImage, report);
+            return;
+        }
+        ValidateBundle(bundle);
         if (Directory.Exists(InstallRoot))
             throw new InvalidOperationException(
                 "Installation folder already exists. Nothing overwritten: " + InstallRoot);
 
-        if (configuration.Lab)
-        {
-            var conflicts = new[] { "W32Time", "NTP", "ntpd", "ntpdssl-sag" };
-            foreach (string name in conflicts)
-            {
-                var result = RunSc(new[] { "query", name }, false, report);
-                if (result.ExitCode == 0 &&
-                    Regex.IsMatch(result.Output, @"\bSTATE\s*:\s*4\b", RegexOptions.IgnoreCase))
-                    throw new InvalidOperationException(
-                        $"Clock-setting service {name} is RUNNING. Resolve this conflict manually " +
-                        "before enabling lab clock steps; installer did not change it.");
-            }
-        }
+        if (configuration.Lab) WarnCompetingTimeServices(report);
 
         bool created = false;
         try
@@ -98,9 +251,7 @@ internal static class InstallerOperations
                     "--server-year", configuration.ServerYear.ToString(),
                     "--check-config" }, mustSucceed: true, report);
 
-            string flags = $"--server {configuration.Server} --server-year {configuration.ServerYear}";
-            if (configuration.Lab) flags += " --certification-mode --allow-step";
-            string binPath = "\"" + InstalledWorker + "\" " + flags;
+            string binPath = BuildImagePath(configuration);
 
             report("Registering automatic-start Windows Service (LocalSystem)...");
             RunSc(new[] { "create", ServiceName,
@@ -135,6 +286,7 @@ internal static class InstallerOperations
             report("Mode: " + (configuration.Lab ? "ISOLATED LAB CLOCK CORRECTION" : "MONITOR ONLY"));
             report("Server: " + configuration.Server + ":123");
             report("Dashboard: " + InstalledDashboard);
+            report("Clock correction is confirmed only after the worker records a verified SNTP response.");
         }
         catch (Exception ex)
         {
@@ -170,8 +322,7 @@ internal static class InstallerOperations
         if (image is not null)
         {
             // Never delete a service registered by an unrelated installation.
-            string prefix = "\"" + InstalledWorker + "\"";
-            if (!image.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            if (!IsOwnedImage(image))
                 throw new InvalidOperationException(
                     "Registered service has a different ImagePath. Refusing to remove an unowned service: " + image);
             report("Stopping service...");

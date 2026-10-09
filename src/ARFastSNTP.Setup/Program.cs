@@ -12,20 +12,29 @@ internal static class Program
         {
             try
             {
-                var optionsToTest = SetupArguments.Parse(new[]
-                {
-                    "--server", "192.16.1.175", "--year", "2026", "--lab"
-                });
-                bool valid = optionsToTest.Lab &&
-                    optionsToTest.CommandLine().Contains("--lab") &&
-                    optionsToTest.Server.ToString() == "192.16.1.175" &&
-                    optionsToTest.ServerYear == 2026;
+                var defaults = SetupArguments.Parse(Array.Empty<string>());
+                var sync = SetupArguments.Parse(new[]
+                    { "--server", "192.16.1.175", "--year", "2026", "--lab", "--auto-apply" });
+                var monitor = SetupArguments.Parse(new[]
+                    { "--server", "192.16.1.175", "--year", "2026", "--monitor-only" });
+                bool valid = defaults.Lab &&
+                    sync.Lab && sync.AutoApply && sync.CommandLine().Contains("--auto-apply") &&
+                    monitor.Lab == false && monitor.CommandLine().Contains("--monitor-only") &&
+                    sync.Server.ToString() == "192.16.1.175" &&
+                    sync.ServerYear == 2026;
                 try
                 {
                     SetupArguments.Parse(new[] { "--server", "not-an-ip" });
                     valid = false;
                 }
                 catch (ArgumentException) { }
+                string syncImage = InstallerOperations.BuildImagePath(sync);
+                string monitorImage = InstallerOperations.BuildImagePath(monitor);
+                valid &= InstallerOperations.IsOwnedImage(syncImage) &&
+                    InstallerOperations.ImageHasLabMode(syncImage) &&
+                    !InstallerOperations.ImageHasLabMode(monitorImage) &&
+                    InstallerOperations.ServiceModeLabel(syncImage) == "LAB CLOCK CORRECTION" &&
+                    InstallerOperations.ServiceModeLabel(monitorImage) == "MONITOR ONLY";
                 Environment.ExitCode = valid ? 0 : 3;
             }
             catch { Environment.ExitCode = 3; }

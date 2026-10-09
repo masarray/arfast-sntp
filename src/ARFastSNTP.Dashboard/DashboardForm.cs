@@ -23,7 +23,6 @@ internal sealed class DashboardForm : Form
     private readonly Button _connectButton = new();
     private readonly Button _disconnectButton = new();
     private readonly Button _installButton = new();
-    private readonly Button _labButton = new();
 
     private readonly Label _serverClock = new();
     private readonly Label _pcClock = new();
@@ -120,8 +119,7 @@ internal sealed class DashboardForm : Form
 
         _connectButton.Click += (_, _) => Connect();
         _disconnectButton.Click += (_, _) => StopPortable();
-        _installButton.Click += (_, _) => InstallService(false);
-        _labButton.Click += (_, _) => InstallService(true);
+        _installButton.Click += (_, _) => InstallService();
         _serverInput.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter) { Connect(); e.SuppressKeyPress = true; }
@@ -182,15 +180,12 @@ internal sealed class DashboardForm : Form
         ConfigureButton(_connectButton, "CONNECT", Color.FromArgb(37, 112, 193), Color.White);
         ConfigureButton(_disconnectButton, "STOP", Color.FromArgb(75, 83, 96), Color.White);
         _disconnectButton.Enabled = false;
-        ConfigureButton(_installButton, "INSTALL SERVICE", Color.FromArgb(57, 77, 100), Color.White);
-        ConfigureButton(_labButton, "LAB CLOCK STEP", Color.FromArgb(105, 65, 42), Color.White);
+        ConfigureButton(_installButton, "INSTALL & SYNC", Color.FromArgb(37, 112, 193), Color.White);
 
         panel.Controls.Add(_connectButton, 4, 0);
         panel.Controls.Add(_disconnectButton, 5, 0);
         panel.Controls.Add(_installButton, 0, 1);
-        panel.SetColumnSpan(_installButton, 2);
-        panel.Controls.Add(_labButton, 2, 1);
-        panel.SetColumnSpan(_labButton, 2);
+        panel.SetColumnSpan(_installButton, 4);
 
         var hint = MakeLabel("CONNECT: no installation or clock correction", 8, Color.FromArgb(178, 194, 213));
         panel.Controls.Add(hint, 4, 1);
@@ -367,56 +362,48 @@ internal sealed class DashboardForm : Form
         }
     }
 
-    private void InstallService(bool certification)
+    private void InstallService()
     {
         if (!TryGetServer(out var server)) return;
         SavePreferences(server);
-        if (certification)
-        {
-            var answer = MessageBox.Show(this,
-                "ISOLATED CERTIFICATION PC ONLY.\n\n" +
-                "Clock correction can jump Windows time by YEARS and invalidate SCADA " +
-                "SOE / historian timestamps.\n\n" +
-                "The setup utility will require a second explicit lab confirmation.\n\n" +
-                "Open LAB setup?",
-                "Warning: isolated lab clock correction", MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-            if (answer != DialogResult.Yes) return;
-        }
-
         string setup = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
             "..", "ARFastSNTP.Setup.exe"));
         if (!File.Exists(setup))
         {
             MessageBox.Show(this,
-                "New standalone C# setup is missing.\n" +
-                "Download and extract the complete CI artifact ZIP, retaining " +
-                "ARFastSNTP.Setup.exe alongside worker/ and dashboard/.\n\n" +
-                "CONNECT still works without installing anything.",
-                "Installer not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "Installer not found. Extract the complete latest Windows CI artifact, " +
+                "including ARFastSNTP.Setup.exe.\n\nCONNECT remains available for monitoring.",
+                "Missing installer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        StopPortable(false); // Prevent parallel portable monitor while the service starts.
+
+        // Explicit INSTALL & SYNC requests the clock-adjusting service.
+        // Elevate once and let the setup apply immediately after UAC.
+        StopPortable(false);
         try
         {
-            var startInfo = new ProcessStartInfo
+            var start = new ProcessStartInfo
             {
-                FileName = setup, WorkingDirectory = Path.GetDirectoryName(setup)!,
-                UseShellExecute = true, Verb = "runas"
+                FileName = setup,
+                WorkingDirectory = Path.GetDirectoryName(setup)!,
+                UseShellExecute = true,
+                Verb = "runas"
             };
-            startInfo.ArgumentList.Add("--server");
-            startInfo.ArgumentList.Add(server.ToString());
-            startInfo.ArgumentList.Add("--year");
-            startInfo.ArgumentList.Add(((int)_yearInput.Value).ToString(CultureInfo.InvariantCulture));
-            if (certification) startInfo.ArgumentList.Add("--lab");
-            using var process = Process.Start(startInfo);
-            _status.Text = "Setup window opened. Review service mode and click INSTALL SERVICE there.";
-            _connectionInfo.Text = "The C# setup window displays install errors and persistent log; no PowerShell.";
+            start.ArgumentList.Add("--server");
+            start.ArgumentList.Add(server.ToString());
+            start.ArgumentList.Add("--year");
+            start.ArgumentList.Add(((int)_yearInput.Value).ToString(CultureInfo.InvariantCulture));
+            start.ArgumentList.Add("--lab");
+            start.ArgumentList.Add("--auto-apply");
+            using var process = Process.Start(start);
+            _status.Text = "Installing/updating automatic clock synchronization service...";
+            _connectionInfo.Text = "Install & Sync requested. Service results appear in the setup window.";
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show(this, ex.Message, "Cannot open Windows setup",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, ex.Message,
+                "Windows Administrator approval denied or setup could not start",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
