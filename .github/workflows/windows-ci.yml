@@ -22,7 +22,6 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Compile application and regression harness
         run: |
-          dotnet build src/ARFastSNTP/ARFastSNTP.csproj -c Release --warnaserror
           dotnet build tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --warnaserror
       - name: Run deterministic NTP era regression tests
         run: dotnet run --project tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --no-build

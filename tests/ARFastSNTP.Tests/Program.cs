@@ -40,5 +40,16 @@ Check("clock step during request rejected", ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), TimeSpan.FromMilliseconds(15)));
 Check("normal packet delay accepted", !ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMilliseconds(21), TimeSpan.FromMilliseconds(20)));
+using (var gate = new CoalescingGate())
+{
+    Check("first refresh enters", await gate.TryEnterAsync(CancellationToken.None));
+    Check("duplicate refresh coalesced", !await gate.TryEnterAsync(CancellationToken.None));
+    gate.Exit();
+    Check("gate released", await gate.TryEnterAsync(CancellationToken.None));
+    gate.Exit();
+}
+Check("status snapshot serializes", StatusSnapshot.Serialize(new StatusSnapshot(
+    DateTimeOffset.UtcNow, "192.16.1.175", "Monitor", null, null, null, null))
+    .Contains("192.16.1.175", StringComparison.Ordinal));
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

@@ -77,7 +77,7 @@ static async Task<(TimeSpan offset, double rtt)> QueryAsync(IPAddress ip, Cancel
     var t4 = t1 + clock.Elapsed;
     // A Windows clock step during the UDP exchange invalidates this sample.
     // Monotonic elapsed time must agree with wall-clock elapsed time.
-    if (ClockDiscontinuity.Detected(t1, actualReceiveTime, clock.Elapsed))
+    if (ARFastSNTP.ClockDiscontinuity.Detected(t1, actualReceiveTime, clock.Elapsed))
         throw new InvalidOperationException("Windows clock changed during NTP exchange");
     var bytes = response.Buffer;
     if (bytes.Length < 48 || !response.RemoteEndPoint.Address.Equals(ip))
