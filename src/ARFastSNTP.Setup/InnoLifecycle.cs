@@ -166,7 +166,20 @@ internal static class InnoLifecycle
 
             report("SUCCESS: service RUNNING, startup=Automatic, mode=" +
                 (options.Lab ? "CLOCK SYNC" : "MONITOR") + ", source=" + options.Server + ":123");
-            report("Actual clock synchronization is verified by later valid SNTP samples.");
+            // Running ≠ synchronized. The installer records verified health
+            // separately for the final wizard; non-response is not a failed install.
+            try
+            {
+                var health = options.Lab
+                    ? SourceServiceControl.WaitForFreshResult(TimeSpan.FromSeconds(8), report)
+                    : SourceServiceControl.Health.Waiting;
+                SourceServiceControl.WriteInstallResult(health);
+            }
+            catch (Exception healthError)
+            {
+                report("Service active; sync check unavailable: " + healthError.Message);
+                SourceServiceControl.WriteInstallResult(SourceServiceControl.Health.Waiting);
+            }
             // Cosmetic cleanup is deliberately non-fatal to the validated service.
             try { LegacyShortcutCleanup.Reconcile(report); }
             catch (Exception ex) { report("Legacy shortcut cleanup skipped: " + ex.Message); }

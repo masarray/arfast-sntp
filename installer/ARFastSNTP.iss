@@ -2,9 +2,8 @@
 [Setup]
 AppId={{A9AEFEC9-42AE-4BDC-A69C-F2053D0D97A0}
 AppName=AR Fast SNTP
-AppVersion=0.9.1
+AppVersion=0.9.2
 DefaultDirName={autopf}\ARFastSNTP
-UsePreviousPrivileges=yes
 UsePreviousAppDir=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
@@ -33,10 +32,10 @@ Source: "..\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\DESIGN-TOKEN-PROVENANCE.md"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\AR Fast SNTP Studio"; Filename: "{app}\studio\ARFastSNTP.Studio.exe"
+Name: "{autoprograms}\AR Fast SNTP"; Filename: "{app}\studio\ARFastSNTP.Studio.exe"
 
 [Run]
-Filename: "{app}\studio\ARFastSNTP.Studio.exe"; Description: "Open SNTP Live Monitor"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\studio\ARFastSNTP.Studio.exe"; Description: "Open NTP Monitor"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [Code]
 var
@@ -56,6 +55,29 @@ begin
   Result := Copy(Source, P, E - P);
 end;
 
+function ValidIp(const Ip: String): Boolean;
+var I, Dots, Digits, Octet: Integer; C: Char;
+begin
+  Result := False; Dots := 0; Digits := 0; Octet := 0;
+  for I := 1 to Length(Ip) do
+  begin
+    C := Ip[I];
+    if C = '.' then
+    begin
+      if (Digits = 0) or (Octet > 255) then Exit;
+      Dots := Dots + 1; Digits := 0; Octet := 0;
+    end
+    else if (C >= '0') and (C <= '9') then
+    begin
+      Digits := Digits + 1;
+      Octet := Octet * 10 + Ord(C) - Ord('0');
+      if (Digits > 3) or (Octet > 255) then Exit;
+    end
+    else Exit;
+  end;
+  Result := (Dots = 3) and (Digits > 0);
+end;
+
 procedure InitializeWizard;
 var Existing, Ip, Yr: String;
 begin
@@ -67,47 +89,14 @@ begin
   if Yr = '' then Yr := '2026';
   if ExpandConstant('{param:SERVER|}') <> '' then Ip := ExpandConstant('{param:SERVER|}');
   if ExpandConstant('{param:YEAR|}') <> '' then Yr := ExpandConstant('{param:YEAR|}');
-  if (StrToIntDef(Yr, 0) < 2020) or (StrToIntDef(Yr, 0) > 2090) then
-    Yr := '2026';
-  ServerPage := CreateInputQueryPage(wpWelcome, 'NTP server',
-    'Install and synchronize', 'Enter the trusted server for this isolated certification PC.');
-  ServerPage.Add('Server IPv4:', False);
+  if (StrToIntDef(Yr, 0) < 2020) or (StrToIntDef(Yr, 0) > 2090) then Yr := '2026';
+  ServerPage := CreateInputQueryPage(wpWelcome, 'NTP Server',
+    'Enter NTP Server IP Address',
+    'This PC will check the NTP server automatically after installation.');
+  ServerPage.Add('NTP Server IP Address:', False);
   ServerPage.Values[0] := Ip;
-  { NTP era-reference is a protocol implementation detail, not a novice input.
-    Keep the previous trusted era/year to avoid incorrect 2036 rollover, or
-    use the packaged default. Headless installs can still pass /YEAR=. }
-  ServerYear := Yr;
   ServerIp := Ip;
-end;
-
-function IsValidIPv4(const Ip: String): Boolean;
-var
-  I, Dots, Digits, Octet: Integer;
-  C: Char;
-begin
-  Result := False;
-  Dots := 0;
-  Digits := 0;
-  Octet := 0;
-  for I := 1 to Length(Ip) do
-  begin
-    C := Ip[I];
-    if C = '.' then
-    begin
-      if (Digits = 0) or (Digits > 3) or (Octet > 255) then Exit;
-      Dots := Dots + 1;
-      Digits := 0;
-      Octet := 0;
-    end
-    else if (C >= '0') and (C <= '9') then
-    begin
-      Digits := Digits + 1;
-      Octet := (Octet * 10) + (Ord(C) - Ord('0'));
-      if (Digits > 3) or (Octet > 255) then Exit;
-    end
-    else Exit;
-  end;
-  Result := (Dots = 3) and (Digits >= 1) and (Digits <= 3) and (Octet <= 255);
+  ServerYear := Yr;
 end;
 
 function NextButtonClick(PageID: Integer): Boolean;
@@ -115,9 +104,9 @@ begin
   Result := True;
   if PageID <> ServerPage.ID then Exit;
   ServerIp := Trim(ServerPage.Values[0]);
-  if not IsValidIPv4(ServerIp) then
+  if not ValidIp(ServerIp) then
   begin
-    MsgBox('Enter a valid NTP server IPv4 address.', mbError, MB_OK);
+    MsgBox('Enter a valid NTP server IP address.', mbError, MB_OK);
     Result := False;
   end;
 end;
@@ -133,42 +122,69 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   ExtractTemporaryFile('ARFastSNTP.Setup.exe');
-  WizardForm.StatusLabel.Caption := 'Preparing previous AR Fast SNTP service...';
+  WizardForm.StatusLabel.Caption := 'Checking existing NTP service...';
   if not RunHelper(ExpandConstant('{tmp}\ARFastSNTP.Setup.exe'),
     '--inno-prepare --server ' + ServerIp + ' --year ' + ServerYear) then
-    Result := 'Cannot prepare the existing service. See ProgramData\ARFastSNTP\setup.log.';
+    Result := 'Cannot prepare NTP service. See C:\ProgramData\ARFastSNTP\setup.log.';
 end;
 
 procedure CurStepChanged(Step: TSetupStep);
 var Flags: String;
 begin
   if Step <> ssPostInstall then Exit;
-  WizardForm.StatusLabel.Caption := 'Starting Windows time synchronization...';
+  WizardForm.StatusLabel.Caption := 'Starting NTP service and checking the server...';
   Flags := '--inno-activate --server ' + ServerIp + ' --year ' + ServerYear;
-  if ExpandConstant('{param:LABSYNC|1}') <> '0' then
-    Flags := Flags + ' --lab'
-  else
-    Flags := Flags + ' --monitor-only';
+  if ExpandConstant('{param:LABSYNC|1}') <> '0' then Flags := Flags + ' --lab'
+  else Flags := Flags + ' --monitor-only';
   if not RunHelper(ExpandConstant('{app}\setup\ARFastSNTP.Setup.exe'), Flags) then
-    RaiseException('Service could not start. Check ProgramData\ARFastSNTP\setup.log.');
+    RaiseException('NTP service did not start. Check C:\ProgramData\ARFastSNTP\setup.log.');
+end;
+
+procedure CurPageChanged(PageID: Integer);
+var Health: String;
+begin
+  if PageID <> wpFinished then Exit;
+  Health := 'WAITING';
+  if LoadStringFromFile(
+    ExpandConstant('{commonappdata}\ARFastSNTP\install-result.txt'), Health) then
+    Health := Trim(Health);
+  if ExpandConstant('{param:LABSYNC|1}') = '0' then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'NTP monitoring is ready';
+    WizardForm.FinishedLabel.Caption := 'NTP service is running in monitor mode.' + #13#10 +
+      'PC time will not be changed.';
+  end
+  else if Health = 'SYNCED' then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'PC time is synchronized';
+    WizardForm.FinishedLabel.Caption := 'NTP service is running.' + #13#10 +
+      'Your PC time was verified with the NTP server.' + #13#10 +
+      'Sync keeps running after you close the monitor.';
+  end
+  else if Health = 'REPLY' then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'NTP service is running';
+    WizardForm.FinishedLabel.Caption := 'NTP server responded. PC time is still being checked.' +
+      #13#10 + 'Open the monitor to see progress.';
+  end
+  else
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'NTP service is running';
+    WizardForm.FinishedLabel.Caption := 'No NTP reply has been verified yet.' + #13#10 +
+      'Open the monitor to check the connection.';
+  end;
 end;
 
 procedure CurUninstallStepChanged(Step: TUninstallStep);
 begin
   if Step = usUninstall then
     if not RunHelper(ExpandConstant('{app}\setup\ARFastSNTP.Setup.exe'), '--inno-remove') then
-      RaiseException('Service could not be removed; uninstall cancelled.');
+      RaiseException('Cannot stop NTP service. Uninstall cancelled.');
 end;
 
 procedure DeinitializeSetup;
 begin
-  { If setup was cancelled or failed after preflight, restore the old service.
-    On successful install the recovery snapshot is absent, so this is a no-op. }
   if FileExists(ExpandConstant('{tmp}\ARFastSNTP.Setup.exe')) then
-  begin
-    if not RunHelper(ExpandConstant('{tmp}\ARFastSNTP.Setup.exe'),
-      '--inno-abort') then
-      Log('Recovery after cancelled setup needs administrator attention: ' +
-        'C:\ProgramData\ARFastSNTP\setup.log');
-  end;
+    if not RunHelper(ExpandConstant('{tmp}\ARFastSNTP.Setup.exe'), '--inno-abort') then
+      Log('NTP recovery needs attention: C:\ProgramData\ARFastSNTP\setup.log');
 end;

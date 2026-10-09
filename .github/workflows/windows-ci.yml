@@ -90,8 +90,16 @@ jobs:
           }
           if (-not $xaml.Contains('HistoryScroll') -or
               -not $xaml.Contains('PeerBroadcast') -or
-              -not $xaml.Contains('PcClock')) {
-            throw 'Compact NTP monitor lost required components'
+              -not $xaml.Contains('PcClock') -or
+              -not $xaml.Contains('SwitchIcon') -or
+              -not $xaml.Contains('ToggleSource_OnClick')) {
+            throw 'Compact NTP monitor lost real source switch or required components'
+          }
+          $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
+          if (-not $wizard.Contains('Enter NTP Server IP Address') -or
+              -not $wizard.Contains('FinishedHeadingLabel') -or
+              -not $wizard.Contains('install-result.txt')) {
+            throw 'Inno completion must distinguish service running from verified sync'
           }
           if (Test-Path 'publish/dashboard') {
             throw 'Old WinForms UI must not be bundled into the canonical installer'
