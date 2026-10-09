@@ -10,7 +10,11 @@ function Test-IsAdministrator {
 if (-not (Test-IsAdministrator)) {
     $arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"'
     if ($RemoveStatusHistory) { $arguments += ' -RemoveStatusHistory' }
-    $child = Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments -Wait -PassThru
+    $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
+        throw 'Built-in Windows PowerShell executable unavailable. CONNECT can monitor without installation.'
+    }
+    $child = Start-Process -FilePath $windowsPowerShell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
     exit $child.ExitCode
 }
 $serviceName = 'ARFastSNTP'
@@ -26,7 +30,7 @@ if ($null -ne $existing) {
         $controller = Get-Service -Name $serviceName
         $controller.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(20))
     }
-    & sc.exe delete $serviceName | Out-Null
+    & (Join-Path $env:SystemRoot 'System32\sc.exe') delete $serviceName | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Service deletion failed ($LASTEXITCODE)." }
 }
 if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }

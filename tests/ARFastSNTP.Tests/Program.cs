@@ -128,5 +128,40 @@ var shiftedSample = NtpProtocol.Parse(requestBytes, replyBytes, localT1,
     localT1.AddMilliseconds(22), 2026);
 Check("multi-year Windows clock offset survives NTP parsing",
     shiftedSample.Offset > TimeSpan.FromDays(1000));
+
+var testUtc = new DateTimeOffset(2023, 7, 12, 15, 58, 29, TimeSpan.Zero);
+string oldWorkerStatus = System.Text.Json.JsonSerializer.Serialize(new
+{
+    Server = "192.16.1.175",
+    UpdatedUtc = testUtc,
+    State = "Offset detected",
+    OffsetMilliseconds = 81000000000.0,
+    EstimatedServerUtc = testUtc.AddYears(3),
+    RequestCount = 3L
+    // Intentionally lacks StepEnabled, AcceptedCount, RejectedCount, LastEvent.
+});
+bool legacyParsed = ARFastSNTP.Dashboard.DashboardStatus.TryParse(
+    oldWorkerStatus, out var legacy, out _);
+Check("dashboard tolerates older status missing StepEnabled", legacyParsed && legacy is not null &&
+    !legacy.StepEnabled && legacy.RequestCount == 3 && legacy.AcceptedCount == 0);
+Check("legacy dashboard status is not mislabeled synchronized", legacy is not null &&
+    !legacy.IsSynchronized(testUtc.AddSeconds(2)) &&
+    legacy.HasValidReply(testUtc.AddSeconds(2)));
+Check("malformed JSON rejected without exception",
+    !ARFastSNTP.Dashboard.DashboardStatus.TryParse("{ invalid",
+        out _, out _));
+Check("empty status rejected without exception",
+    !ARFastSNTP.Dashboard.DashboardStatus.TryParse("{}", out _, out _));
+Check("stale status not shown live after clock jump",
+    legacy is not null && !legacy.HasValidReply(testUtc.AddHours(1)));
+var normalizedStatus = StatusSnapshot.Serialize(new StatusSnapshot(
+    testUtc, "192.16.1.175", "Synchronized", 12.5, 3.2,
+    testUtc.AddMilliseconds(12.5), null)
+{ StepEnabled = false, RequestCount = 8, AcceptedCount = 7, RejectedCount = 1 });
+bool currentParsed = ARFastSNTP.Dashboard.DashboardStatus.TryParse(
+    normalizedStatus, out var current, out _);
+Check("current worker status parsed and lamps valid", currentParsed && current is not null &&
+    current.HasValidReply(testUtc.AddSeconds(2)) &&
+    current.IsSynchronized(testUtc.AddSeconds(2)) && current.AcceptedCount == 7);
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

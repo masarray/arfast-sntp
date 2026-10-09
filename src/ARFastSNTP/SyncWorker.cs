@@ -16,6 +16,8 @@ internal sealed class SyncWorker : BackgroundService
     private long _lastStepStamp;
     private bool _pendingVerification;
     private bool _validatedBaseline;
+    private long _lastStatusLogTimestamp;
+    private string? _lastLoggedState;
 
     internal SyncWorker(SyncOptions options, ILogger<SyncWorker> logger)
     {
@@ -199,7 +201,20 @@ internal sealed class SyncWorker : BackgroundService
         {
             _logger.LogError(ex, "Cannot write SNTP status {Path}", _options.StatusPath);
         }
-        _logger.LogDebug("SNTP {State}, offset={Offset}ms RTT={Rtt}ms",
-            snapshot.State, snapshot.OffsetMilliseconds, snapshot.RoundTripMilliseconds);
+        // Surface successful SNTP traffic in the console without flooding
+        // Windows service logs or growing an unbounded in-memory history.
+        bool stateChanged = _lastLoggedState != snapshot.State;
+        bool heartbeatDue = _lastStatusLogTimestamp == 0 ||
+            Stopwatch.GetElapsedTime(_lastStatusLogTimestamp) >= TimeSpan.FromSeconds(30);
+        if (stateChanged || heartbeatDue)
+        {
+            _lastStatusLogTimestamp = Stopwatch.GetTimestamp();
+            _lastLoggedState = snapshot.State;
+            _logger.LogInformation(
+                "SNTP {State}: server={Server}:123 offset={Offset}ms RTT={Rtt}ms requests={Requests} valid={Valid} rejected={Rejected}",
+                snapshot.State, snapshot.Server, snapshot.OffsetMilliseconds,
+                snapshot.RoundTripMilliseconds, snapshot.RequestCount,
+                snapshot.AcceptedCount, snapshot.RejectedCount);
+        }
     }
 }

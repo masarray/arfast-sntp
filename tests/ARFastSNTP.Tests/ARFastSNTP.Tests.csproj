@@ -8,5 +8,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/ARFastSNTP/ARFastSNTP.csproj" />
+    <!-- Compile the UI's dependency-free status reader in the regression harness.
+         No WinForms display or window session required. -->
+    <Compile Include="../../src/ARFastSNTP.Dashboard/DashboardStatus.cs" Link="DashboardStatus.cs" />
   </ItemGroup>
 </Project>

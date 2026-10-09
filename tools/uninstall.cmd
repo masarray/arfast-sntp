@@ -1,7 +1,15 @@
 @echo off
 setlocal
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*
-if errorlevel 1 (
-  echo Removal did not complete. See the error above.
+set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS_EXE%" (
+  echo ERROR: Windows PowerShell not found at the standard system path.
+  pause
+  exit /b 2
+)
+"%PS_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*
+set "RESULT=%ERRORLEVEL%"
+if not "%RESULT%"=="0" (
+  echo Uninstall failed or was cancelled. Check the error above.
   pause
 )
+exit /b %RESULT%

@@ -1,0 +1,24 @@
+AR FAST SNTP - WINDOWS QUICK START
+=================================
+
+YOUR TEST: NO POWERSHELL REQUIRED
+1. Extract the complete ARFastSNTP-Windows-x64 ZIP.
+2. Double-click dashboard\ARFastSNTP.Dashboard.exe
+3. Enter SNTP Server IP (default 192.16.1.175), then click CONNECT.
+4. The dashboard starts its own monitor-only SNTP worker. No Windows clock changes.
+5. If SERVER / VALID REPLY remain offline, verify UDP port 123 and network/firewall.
+
+AUTOMATIC WINDOWS SERVICE (OPTIONAL, REQUIRES ADMIN)
+- Click INSTALL SERVICE in the GUI, or double-click install-monitor.cmd.
+- The service runs after the dashboard closes and after PC reboot.
+- Installer uses the full Windows PowerShell system path, even if PATH is broken.
+- If PowerShell is blocked, GUI CONNECT still works without installing anything.
+
+LAB TIME CORRECTION: ISOLATED TEST PC ONLY
+- Never use forced time steps on live SCADA/SOE/historian equipment.
+- Click LAB CLOCK STEP and acknowledge the warning, only on approved isolated PC.
+- Check and manually resolve competing time services first.
+
+To remove Windows Service: uninstall.cmd (preserves status/history by default).
+The worker EXE is a background engine; use the dashboard to configure an IP.
+The 'Broadcast' lamp is UNKNOWN since ordinary SNTP polls do not measure broadcast.

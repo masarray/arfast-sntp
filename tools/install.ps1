@@ -25,7 +25,11 @@ if (-not (Test-IsAdministrator)) {
     $arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Server ' +
         $Server + ' -ServerYear ' + $ServerYear
     if ($CertificationStep) { $arguments += ' -CertificationStep -AcceptLabRisk' }
-    $child = Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arguments -Wait -PassThru
+    $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
+        throw 'Built-in Windows PowerShell executable unavailable. CONNECT can monitor without installation.'
+    }
+    $child = Start-Process -FilePath $windowsPowerShell -Verb RunAs -ArgumentList $arguments -Wait -PassThru
     exit $child.ExitCode
 }
 $worker = Join-Path $PSScriptRoot 'worker\ARFastSNTP.exe'
@@ -78,7 +82,7 @@ try {
 catch {
     if ($registered) {
         Stop-Service -Name $serviceName -ErrorAction SilentlyContinue
-        & sc.exe delete $serviceName | Out-Null
+        & (Join-Path $env:SystemRoot 'System32\sc.exe') delete $serviceName | Out-Null
     }
     if (Test-Path -LiteralPath $root) {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue

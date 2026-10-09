@@ -1,72 +1,95 @@
-# AR Fast SNTP — Windows certification prototype
+# AR Fast SNTP — Windows SNTP Monitor & Lab Sync
 
-A lightweight .NET 8 Windows Service SNTP worker and separate read-only WinForms dashboard.
+Lightweight C# .NET 8 SNTP worker + graphical dashboard. A dedicated, explicitly approved
+**lab mode** can correct Windows time. Normal GUI use is safe **MONITOR ONLY**.
 
-> **OT safety:** Do NOT enable forced time stepping on live SCADA/SOE/historian
-> hosts. Use only on an approved isolated certification PC. Basic NTPv4 is
-> unauthenticated; never trust a public or untrusted NTP source for clock stepping.
+## Quick start (no installer, PowerShell, or Administrator required)
 
-## Fast Windows setup from GitHub Actions
+1. Open the latest successful [Windows CI artifact](https://github.com/masarray/arintp/actions)
+   named **ARFastSNTP-Windows-x64** and **Extract All**.
+2. Run **`dashboard/ARFastSNTP.Dashboard.exe`** (not the console worker).
+3. Enter **SNTP Server IP** (default `192.16.1.175`), select **YEAR** (NTP-era reference,
+   default 2026), then click **CONNECT**.
+4. The dashboard automatically starts a background worker in **Monitor Only** mode.
+   No Windows clock settings are changed. Green "VALID REPLY" means UDP/123
+   NTP transactions passed validation. "SYNCHRONIZED" means PC offset is within
+   100 ms *at the last validated sample* — it does not mean a correction occurred.
+5. Click **STOP** to stop this temporary monitor, or close the GUI.
+   The GUI owns only its child monitor process and does not stop Windows Services.
 
-1. Open the latest green [Windows CI](https://github.com/masarray/arintp/actions).
-2. Download the `ARFastSNTP-Windows-x64` artifact, **extract the ZIP**.
-3. Double-click **`install-monitor.cmd`** for a safe, monitor-only service.
-   The default server is **192.16.1.175** (UDP 123), server-era reference 2026.
-4. On an **isolated lab PC only**, resolve competing Windows Time/Meinberg/Siemens
-   time-setting services, then use **`install-certification-lab.cmd`** and
-   explicitly confirm the years-scale clock-step warning.
-5. Approve the Windows UAC prompt. The scripts register an automatic-start
-   service `ARFastSNTP` and create a desktop shortcut to the dashboard.
-6. Run **`uninstall.cmd`** to stop and remove the service and executables.
-   It leaves the last status/event evidence in ProgramData by default.
+**Important:** CONNECT tests reachability and offset but does **not** correct the Windows date.
+If the PC is set to 2023 while GPS time is 2026, a large valid offset is expected
+until an authorized isolated-lab Windows Service is installed in certification mode.
+The graphical UI does not require installing a service simply to test the server.
 
-**Do not run both installers.** Existing service or installation directory
-causes a safe abort. For a new configuration uninstall and reinstall.
+The standalone `worker/ARFastSNTP.exe` needs `--server` arguments; when double-clicked
+without arguments, it now opens the dashboard. The user's latest server IP/year
+selection is stored under LocalAppData (configuration is **never** authorization
+to step Windows time).
 
-To use another peer or year reference, run from the extracted artifact folder:
+## Install a persistent Windows Service (optional)
 
-```powershell
-.\install.ps1 -Server 192.16.1.175 -ServerYear 2026
-# ISOLATED LAB PC ONLY (no other active time-setting service):
-.\install.ps1 -Server 192.16.1.175 -ServerYear 2026 -CertificationStep -AcceptLabRisk
-```
+Click **INSTALL SERVICE** in the GUI, or use `install-monitor.cmd` from
+the extracted ZIP. This installs an automatic-start monitor-only service and
+desktop shortcut. Windows UAC Administrator approval is required to register it.
+The installer now uses the absolute Windows PowerShell executable path instead
+of assuming `powershell.exe` is on PATH.
 
-Scripts use Windows PowerShell/UAC and have no external installer dependencies.
-This bundle is **not an MSI or digitally signed installer**. Do not assume
-installation is validated merely because PowerShell scripts parse in CI.
+If Windows PowerShell is unavailable or blocked, **CONNECT** still works for
+temporary monitoring. The dashboard is independent of the Windows Service.
 
-## SNTP worker design
+### Enable time correction: isolated certification PC ONLY
 
-- Cold start or suspicious drift: three sequential SNTP transactions must
-  agree within 250ms. Only this verified median can authorize a clock step.
-- Stable synchronization: one request every ~3s instead of three requests
-  every ~1s. Every sample is validated.
-- Monitor-only with a large offset: verified burst ~every 5s.
-- After step: verification on next ~1s cycle with a monotonic cooldown
-  to avoid a rapid correction loop.
-- UDP receive timeout: 2s; failed polling uses bounded exponential backoff.
-  `RATE` KoD backs off one minute. `DENY`/`RSTR` suppress further polling
-  until service restart.
-- Serial BackgroundService worker; no parallel clock-set operations.
-  Only 16 correction history messages are kept in memory.
-- Atomic replace of `%ProgramData%\ARFastSNTP\status.json`, with event
-  counters and estimated server UTC. GUI refresh coalesces to ~0.5Hz.
-- Broadcast lamp is explicitly **unmeasured**, since UDP request/reply does
-  not prove broadcast service.
+Never do this on production SCADA, SOE, historian or a live workstation.
+A separate **LAB CLOCK STEP** button and `install-certification-lab.cmd` require
+explicit risk acknowledgement. Check that other time-setting services are stopped
+under an authorized maintenance procedure. The application does not disable
+Windows Time, Meinberg or Siemens NTP for you.
 
-### Development commands
+The service with clock correction operates even while the dashboard is closed.
+The temporary CONNECT mode **never** changes system time.
 
-```powershell
-dotnet build src/ARFastSNTP/ARFastSNTP.csproj -c Release
-dotnet run --project tests/ARFastSNTP.Tests -c Release
-ARFastSNTP.exe --server 192.16.1.175 --server-year 2026 --check-config
-```
+Existing service installations are not silently overwritten. To switch server
+IP or mode, uninstall the prior service before installing another one.
 
-See [lab acceptance procedure](docs/LAB-ACCEPTANCE.md) before enabling clock stepping.
+## Why this matters
 
-## Not yet certified
+- The GUI and Windows Service are separate processes; only the worker can
+  correct the system clock and only with explicit certification flags.
+- SNTP uses UDP port 123; ICMP ping alone does not imply an NTP transaction.
+- The estimated server clock is derived from the last valid NTP measurement.
+- Broadcast indicator stays **UNKNOWN** because unicast SNTP is not broadcast.
+- The worker uses bounded 3-sample validation for suspicious offsets, adaptive
+  polling when stable, RFC Kiss-o'-Death handling, and a 16-event correction ring.
+- The status file is replaced atomically; UI reads a single snapshot rather
+  than accumulating an unbounded stream of events.
 
-No automated Windows Service integration acceptance test, signed MSI, physical
-GPS verification, active NTP broadcast receiver or authenticated NTP.
-The time source must reside on a trusted, isolated network. Time discipline
-and SOE/historian behavior require site-specific approval before production use.
+## Important release limitations
+
+Basic SNTP is unauthenticated, and source spoofing is possible on an untrusted network.
+No signed MSI, physical GPS validation, or production SCADA acceptance has been completed.
+Scripts have PowerShell syntax checks in CI, not a full service install/uninstall trial.
+Use the [isolated lab acceptance plan](docs/LAB-ACCEPTANCE.md) before enabling stepping.
+
+## Troubleshooting status exceptions
+
+Older builds could crash with **"The given key was not present in the dictionary"**
+when a status file from an older worker omitted `StepEnabled` or other optional
+JSON properties. The current dashboard reads status through a version-tolerant DTO,
+rejects corrupt files safely, and shows offline diagnostics instead of crashing.
+The regression suite checks missing fields, corrupted JSON, stale responses and
+multi-year clock offset decoding. The worker now logs bounded successful transaction
+summaries to the console.
+
+If the worker says "Application started", it **is running**; absence of one-second
+console output was intentional in prior releases. Use the dashboard for live lamps
+and request/reply counters. The monitor displays synchronization as a measurement,
+not proof of an adjustment.
+
+If `install-monitor.cmd` used to fail with "powershell.exe is not recognized",
+the new launcher resolves the full built-in Windows PowerShell executable path.
+This may still fail on PCs where Windows administrators explicitly block PowerShell;
+CONNECT needs no PowerShell.
+
+Always remove/close **old dashboard builds** before launching the new artifact.
+The dashboard and worker must both come from the **same ZIP**.
