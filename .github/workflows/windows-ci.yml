@@ -14,23 +14,26 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Compile application and regression harness
+      - name: Build worker, regression harness and GUI
         run: |
           dotnet build tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --warnaserror
-      - name: Run deterministic NTP era regression tests
+          dotnet build src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release --warnaserror
+      - name: Deterministic SNTP regression tests
         run: dotnet run --project tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --no-build
-      - name: Publish x64
-        run: dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
-      - name: Upload executable artifact
+      - name: Publish worker and dashboard (x64)
+        run: |
+          dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/worker
+          dotnet publish src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/dashboard
+      - name: Upload Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: ARFastSNTP-win-x64
+          name: ARFastSNTP-Windows-x64
           path: publish/
           if-no-files-found: error
           retention-days: 14

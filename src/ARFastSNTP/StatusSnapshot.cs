@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace ARFastSNTP;
 
-/// <summary>Bounded status snapshot for a read-only dashboard; no event queue accumulation.</summary>
+/// <summary>Small overwrite-only status: no unbounded transaction or event history.</summary>
 internal sealed record StatusSnapshot(
     DateTimeOffset UpdatedUtc,
     string Server,
@@ -12,5 +12,13 @@ internal sealed record StatusSnapshot(
     DateTimeOffset? EstimatedServerUtc,
     string? LastEvent)
 {
+    internal long RequestCount { get; init; }
+    internal long AcceptedCount { get; init; }
+    internal long RejectedCount { get; init; }
+    internal byte? Stratum { get; init; }
+    internal DateTimeOffset? LastCorrectionUtc { get; init; }
+    internal bool StepEnabled { get; init; }
+    internal string Broadcast { get; init; } = "Not measured";
+    internal string[] RecentCorrections { get; init; } = Array.Empty<string>();
     internal static string Serialize(StatusSnapshot value) => JsonSerializer.Serialize(value);
 }

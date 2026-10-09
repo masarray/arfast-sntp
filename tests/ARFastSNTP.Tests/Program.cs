@@ -51,5 +51,36 @@ using (var gate = new CoalescingGate())
 Check("status snapshot serializes", StatusSnapshot.Serialize(new StatusSnapshot(
     DateTimeOffset.UtcNow, "192.16.1.175", "Monitor", null, null, null, null))
     .Contains("192.16.1.175", StringComparison.Ordinal));
+
+var referenceTime = new DateTimeOffset(2026, 10, 9, 8, 0, 0, TimeSpan.Zero);
+var requestBytes = new byte[48];
+requestBytes[0] = 0x23;
+NtpProtocol.WriteTimestamp(requestBytes.AsSpan(40, 8), referenceTime);
+var replyBytes = new byte[48];
+replyBytes[0] = 0x24;
+replyBytes[1] = 1;
+requestBytes.AsSpan(40, 8).CopyTo(replyBytes.AsSpan(24, 8));
+NtpProtocol.WriteTimestamp(replyBytes.AsSpan(32, 8), referenceTime.AddMilliseconds(15));
+NtpProtocol.WriteTimestamp(replyBytes.AsSpan(40, 8), referenceTime.AddMilliseconds(16));
+var measured = NtpProtocol.Parse(requestBytes, replyBytes, referenceTime,
+    referenceTime.AddMilliseconds(30), 2026);
+Check("valid synthetic NTP response", measured.RttMs >= 28 && measured.RttMs <= 30);
+bool wrongOriginateRejected = false;
+replyBytes[24] ^= 1;
+try { NtpProtocol.Parse(requestBytes, replyBytes, referenceTime, referenceTime.AddMilliseconds(30), 2026); }
+catch (InvalidOperationException) { wrongOriginateRejected = true; }
+Check("originate mismatch rejected", wrongOriginateRejected);
+replyBytes[24] ^= 1;
+replyBytes[0] = 0xE4;
+bool unsyncedRejected = false;
+try { NtpProtocol.Parse(requestBytes, replyBytes, referenceTime, referenceTime.AddMilliseconds(30), 2026); }
+catch (InvalidOperationException) { unsyncedRejected = true; }
+Check("LI=3 rejected", unsyncedRejected);
+Check("step without certification rejected", RejectStepWithoutCertification());
+static bool RejectStepWithoutCertification()
+{
+    try { SyncOptions.Parse(new[] { "--server", "192.16.1.175", "--allow-step" }); return false; }
+    catch (ArgumentException) { return true; }
+}
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
