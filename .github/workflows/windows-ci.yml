@@ -71,12 +71,18 @@ jobs:
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
           Copy-Item tools/install-sync.cmd,tools/install-monitor.cmd,tools/install-certification-lab.cmd,tools/uninstall.cmd publish/
           Copy-Item docs/LAB-ACCEPTANCE.md,docs/START-HERE.txt publish/
-          foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/install-certification-lab.cmd','publish/uninstall.cmd')) {
+          foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/uninstall.cmd')) {
             if (-not (Select-String -LiteralPath $file -Pattern 'ARFastSNTP.Setup.exe' -SimpleMatch)) {
-              throw "Wrapper missing GUI setup executable: $file"
+              throw "Direct launcher missing graphical installer: $file"
             }
+          }
+          $legacy = Get-Content -LiteralPath 'publish/install-certification-lab.cmd' -Raw
+          if (-not $legacy.Contains('install-sync.cmd')) {
+            throw 'Compatibility shortcut must delegate to canonical install-sync.cmd'
+          }
+          foreach ($file in @('publish/install-sync.cmd','publish/install-monitor.cmd','publish/install-certification-lab.cmd','publish/uninstall.cmd')) {
             if (Select-String -LiteralPath $file -Pattern 'powershell.exe' -SimpleMatch) {
-              throw "Wrapper still depends on PowerShell: $file"
+              throw "Wrapper must not depend on PowerShell: $file"
             }
           }
           $syncLauncher = Get-Content -LiteralPath 'publish/install-sync.cmd' -Raw
