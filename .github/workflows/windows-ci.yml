@@ -111,6 +111,26 @@ jobs:
               $xaml.Contains('Content="+ Add server"')) {
             throw 'Old single-server UI was accidentally restored'
           }
+          if (-not $xaml.Contains('Classes="ntp-row"') -or
+              -not $xaml.Contains('Classes="table-value"') -or
+              -not $xaml.Contains('ColumnDefinitions="29,48,*,104,66,106,116,80,30"')) {
+            throw 'NTP Explorer lost shared alignment and readable row typography'
+          }
+          $dialog = Get-Content 'src/ARFastSNTP.Studio/PeerDialogs.cs' -Raw
+          if (-not $dialog.Contains('SizeToContent = SizeToContent.Height') -or
+              $dialog.Contains('Height = 186') -or
+              $dialog.Contains('Height = 157')) {
+            throw 'NTP Add/Delete dialogs reverted to large fixed-height blank areas'
+          }
+          $history = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
+          if (-not $history.Contains('EventDisplay.Format') -or
+              -not $history.Contains('Grid.SetColumn(description, 1)')) {
+            throw 'History must retain compact aligned event/time layout'
+          }
+          $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
+          if (-not $ntp.Contains('NtpResponseTimeoutException')) {
+            throw 'UDP timeout lost local/remote endpoint diagnostics'
+          }
           $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
           if (-not $viewCode.Contains('PeerControlProtocol.SendAsync') -or
               -not $viewCode.Contains('ReconcileRows') -or

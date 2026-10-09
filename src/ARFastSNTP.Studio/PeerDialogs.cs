@@ -2,48 +2,131 @@ using System.Net;
 using System.Net.Sockets;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ARFastSNTP.Studio.Design;
 
 namespace ARFastSNTP.Studio;
 
-/// <summary>Short operator input, not a second installer or privileged wizard.</summary>
+/// <summary>
+/// Shared modal chrome: compact content sizing, a single action hierarchy,
+/// consistent padding and keyboard handling. No fixed-height blank regions.
+/// </summary>
+internal static class PeerDialogChrome
+{
+    internal static void Configure(Window dialog, Window owner, string title, double width)
+    {
+        dialog.Title = title;
+        dialog.Width = width;
+        dialog.SizeToContent = SizeToContent.Height;
+        dialog.CanResize = false;
+        dialog.ShowInTaskbar = false;
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.Background = BrushResolver.Require(owner, "ArBrush.Canvas");
+        dialog.FontFamily = owner.FontFamily;
+    }
+
+    internal static Button ActionButton(string text, bool primary = false)
+    {
+        var button = new Button
+        {
+            Content = text,
+            MinWidth = primary ? 106 : 82,
+            Height = 32
+        };
+        button.Classes.Add("ar");
+        if (primary) button.Classes.Add("primary");
+        return button;
+    }
+
+    internal static StackPanel Actions(Button cancel, Button confirm)
+    {
+        var footer = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        footer.Children.Add(cancel);
+        footer.Children.Add(confirm);
+        return footer;
+    }
+
+    internal static StackPanel Body(double spacing = 10) =>
+        new()
+        {
+            Spacing = spacing,
+            Margin = new Thickness(18, 17, 18, 18)
+        };
+}
+
 internal sealed class AddPeerDialog : Window
 {
-    internal AddPeerDialog(Window owner)
+    internal AddPeerDialog(Window owner, IReadOnlyCollection<string> existing)
     {
-        Title = "Add NTP Server";
-        Width = 370; Height = 186; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = BrushResolver.Require(owner, "ArBrush.Canvas");
-        FontFamily = owner.FontFamily;
-        var ip = new TextBox { PlaceholderText = "e.g. 192.16.1.175", Text = "",
-            MinHeight = 33 };
-        var hint = new TextBlock { Text = "Enter an IPv4 address",
-            Foreground = BrushResolver.Require(owner, "ArBrush.TextSecondary") };
-        var cancel = new Button { Content = "Cancel", MinWidth = 75 };
-        var add = new Button { Content = "Add Server", MinWidth = 100 };
-        cancel.Click += (_, _) => Close(null);
-        add.Click += (_, _) =>
+        PeerDialogChrome.Configure(this, owner, "Add NTP Server", 374);
+        var label = new TextBlock
+        {
+            Text = "Server IP Address",
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 13
+        };
+        var ip = new TextBox
+        {
+            PlaceholderText = "192.16.1.33",
+            MinHeight = 34,
+            FontSize = 13
+        };
+        ip.Classes.Add("ar-input");
+        var hint = new TextBlock
+        {
+            Text = "",
+            IsVisible = false,
+            FontSize = 11,
+            Foreground = BrushResolver.Require(owner, "ArBrush.Warning")
+        };
+        var cancel = PeerDialogChrome.ActionButton("Cancel");
+        var add = PeerDialogChrome.ActionButton("Add Server", primary: true);
+
+        void Submit()
         {
             string value = ip.Text?.Trim() ?? "";
-            if (!IPAddress.TryParse(value, out var parsed) ||
-                parsed.AddressFamily != AddressFamily.InterNetwork ||
-                parsed.GetAddressBytes()[0] is 0 or >= 224)
+            if (!IPAddress.TryParse(value, out var address) ||
+                address.AddressFamily != AddressFamily.InterNetwork ||
+                address.GetAddressBytes()[0] is 0 or >= 224 ||
+                !string.Equals(value, address.ToString(), StringComparison.Ordinal))
             {
-                hint.Text = "Enter a valid unicast IPv4 address.";
+                hint.Text = "Enter a valid IPv4 address.";
+                hint.IsVisible = true;
                 return;
             }
-            Close(parsed.ToString());
+            if (existing.Contains(address.ToString()))
+            {
+                hint.Text = "This NTP server is already in the list.";
+                hint.IsVisible = true;
+                return;
+            }
+            Close(address.ToString());
+        }
+        cancel.Click += (_, _) => Close(null);
+        add.Click += (_, _) => Submit();
+        ip.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { Submit(); e.Handled = true; }
+            else if (e.Key == Key.Escape) { Close(null); e.Handled = true; }
         };
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8 };
-        buttons.Children.Add(cancel); buttons.Children.Add(add);
-        var body = new StackPanel { Spacing = 9, Margin = new Thickness(17) };
-        body.Children.Add(new TextBlock { Text = "NTP Server IP Address",
-            FontWeight = FontWeight.SemiBold });
-        body.Children.Add(ip); body.Children.Add(hint); body.Children.Add(buttons);
+        ip.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBox.TextProperty && hint.IsVisible)
+                hint.IsVisible = false;
+        };
+        var body = PeerDialogChrome.Body();
+        body.Children.Add(label);
+        body.Children.Add(ip);
+        body.Children.Add(hint);
+        body.Children.Add(PeerDialogChrome.Actions(cancel, add));
         Content = body;
         Opened += (_, _) => ip.Focus();
     }
@@ -53,22 +136,28 @@ internal sealed class RemovePeerDialog : Window
 {
     internal RemovePeerDialog(Window owner, string address)
     {
-        Title = "Remove NTP Server";
-        Width = 375; Height = 157; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = BrushResolver.Require(owner, "ArBrush.Canvas");
-        FontFamily = owner.FontFamily;
-        var text = new TextBlock { Text = "Remove " + address + " from NTP Servers?",
-            TextWrapping = TextWrapping.Wrap };
-        var cancel = new Button { Content = "Cancel", MinWidth = 80 };
-        var remove = new Button { Content = "Remove", MinWidth = 88 };
+        PeerDialogChrome.Configure(this, owner, "Remove NTP Server", 374);
+        var question = new TextBlock
+        {
+            Text = "Remove " + address + "?",
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        };
+        var detail = new TextBlock
+        {
+            Text = "Other NTP servers will remain active.",
+            Foreground = BrushResolver.Require(owner, "ArBrush.TextSecondary"),
+            TextWrapping = TextWrapping.Wrap
+        };
+        var cancel = PeerDialogChrome.ActionButton("Cancel");
+        var remove = PeerDialogChrome.ActionButton("Remove");
         cancel.Click += (_, _) => Close(false);
         remove.Click += (_, _) => Close(true);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8,
-            HorizontalAlignment = HorizontalAlignment.Right };
-        buttons.Children.Add(cancel); buttons.Children.Add(remove);
-        var content = new StackPanel { Spacing = 19, Margin = new Thickness(18) };
-        content.Children.Add(text); content.Children.Add(buttons);
-        Content = content;
+        var body = PeerDialogChrome.Body(10);
+        body.Children.Add(question);
+        body.Children.Add(detail);
+        body.Children.Add(PeerDialogChrome.Actions(cancel, remove));
+        Content = body;
     }
 }

@@ -2,7 +2,7 @@
 [Setup]
 AppId={{A9AEFEC9-42AE-4BDC-A69C-F2053D0D97A0}
 AppName=AR Fast SNTP
-AppVersion=0.10.0
+AppVersion=0.10.1
 DefaultDirName={autopf}\ARFastSNTP
 UsePreviousAppDir=no
 DisableDirPage=yes

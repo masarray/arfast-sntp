@@ -2,18 +2,18 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
         Title="AR Fast SNTP"
-        Width="965" MinWidth="875" MinHeight="252" MaxHeight="740"
+        Width="925" MinWidth="855" MinHeight="225" MaxHeight="740"
         SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
-  <Grid Margin="18,12,18,14" RowDefinitions="38,Auto,Auto" RowSpacing="12">
+  <Grid Margin="16,9,16,12" RowDefinitions="32,Auto,Auto" RowSpacing="9">
 
     <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,20,*,Auto" VerticalAlignment="Center">
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,18,*,Auto" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <TextBlock Classes="micro" Text="PC"/>
-        <TextBlock x:Name="PcClock" FontWeight="SemiBold" FontSize="17"
+        <TextBlock Classes="micro" Text="PC" VerticalAlignment="Center"/>
+        <TextBlock x:Name="PcClock" FontWeight="SemiBold" FontSize="16"
                    Text="--:--:--" VerticalAlignment="Center"/>
         <TextBlock x:Name="PcDate" Classes="micro" Text="—"
                    VerticalAlignment="Center"/>
@@ -41,7 +41,7 @@
     <!-- Server grid is the information center. No unused blank rows. -->
     <Border Grid.Row="1" CornerRadius="9" Padding="13,11,13,10"
             Background="{DynamicResource ArBrush.Surface1}">
-      <Grid RowDefinitions="34,32,Auto,Auto" RowSpacing="3">
+      <Grid RowDefinitions="32,32,Auto,Auto" RowSpacing="3">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
           <TextBlock Text="NTP Servers" FontSize="15" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
@@ -60,16 +60,16 @@
           </Button>
         </Grid>
         <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface2}"
-                CornerRadius="5" Padding="8,0">
-          <Grid ColumnDefinitions="29,50,*,106,68,112,116,78,32" ColumnSpacing="5">
-            <TextBlock Text="#" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="Use" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="2" Text="NTP Server IP" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="3" Text="Status" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="4" Text="Stratum" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="5" Text="Offset" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="6" Text="Server Time" Classes="micro" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="7" Text="Broadcast" Classes="micro" VerticalAlignment="Center"/>
+                CornerRadius="6" Padding="8,0">
+          <Grid ColumnDefinitions="29,48,*,104,66,106,116,80,30" ColumnSpacing="5">
+            <TextBlock Text="#" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Use" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" Text="NTP Server IP" Classes="table-heading" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="3" Text="Status" Classes="table-heading" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="4" Text="Stratum" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="5" Text="Offset" Classes="table-heading" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="6" Text="Server Time" Classes="table-heading" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="7" Text="Broadcast" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Grid>
         </Border>
 
@@ -77,10 +77,12 @@
           <ItemsControl ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Grid Height="42" Margin="8,1"
-                      ColumnDefinitions="29,50,*,106,68,112,116,78,32" ColumnSpacing="5">
-                  <TextBlock Text="{Binding Number}" Classes="muted" VerticalAlignment="Center"/>
-                  <Button Grid.Column="1" Width="39" Height="30" Padding="0"
+                <Border Classes="ntp-row" Height="44" Margin="0,1" Padding="8,0"
+                        CornerRadius="6">
+                  <Grid ColumnDefinitions="29,48,*,104,66,106,116,80,30" ColumnSpacing="5">
+                  <TextBlock Text="{Binding Number}" Classes="table-value"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Width="40" Height="32" Padding="0" HorizontalAlignment="Center"
                           Background="Transparent" BorderThickness="0"
                           IsEnabled="{Binding CanChange}"
                           ToolTip.Tip="Enable or disable this NTP server"
@@ -100,23 +102,24 @@
                       <Path Width="960" Height="960" Stretch="Uniform"
                             Data="M636-848.5Q709-817 763-763t85.5 127Q880-563 880-480v11q-19-13-39-23t-42-17q-8-89-61-161.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h257q-62 37-99.5 100.5T440-240q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 125 83 216.5T451-161q7 23 17 42.5T491-80h-11q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5Zm-57.5 750Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM786-146l28-28-74-74v-112h-40v128l86 86Z" Fill="{Binding IconBrush}"/>
                     </Viewbox>
-                    <TextBlock Text="{Binding Address}" FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Address}" Classes="table-value"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
                   </StackPanel>
-                  <TextBlock Grid.Column="3" Text="{Binding State}"
+                  <TextBlock Grid.Column="3" Text="{Binding State}" Classes="table-value"
                              Foreground="{Binding StatusBrush}"
                              VerticalAlignment="Center" ToolTip.Tip="{Binding LastError}"
                              TextTrimming="CharacterEllipsis"/>
-                  <TextBlock Grid.Column="4" Text="{Binding Stratum}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="5" Text="{Binding Offset}"
-                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="6" Text="{Binding ServerTime}"
+                  <TextBlock Grid.Column="4" Text="{Binding Stratum}" Classes="table-value"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="5" Text="{Binding Offset}" Classes="table-value"
+                             HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="6" Text="{Binding ServerTime}" Classes="table-value"
                              VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="7" Text="{Binding Broadcast}"
-                             VerticalAlignment="Center"
+                  <TextBlock Grid.Column="7" Text="{Binding Broadcast}" Classes="table-value"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
                              ToolTip.Tip="Broadcast packet monitoring is not yet supported."/>
-                  <Button Grid.Column="8" Height="29" Width="28" Padding="4"
-                          Background="Transparent" BorderThickness="0"
+                  <Button Grid.Column="8" Height="30" Width="30" Padding="5"
+                          HorizontalAlignment="Center" Background="Transparent" BorderThickness="0"
                           IsEnabled="{Binding CanChange}" Click="PeerDelete_OnClick"
                           ToolTip.Tip="Remove NTP server">
                     <Viewbox Width="17" Height="17">
@@ -124,7 +127,8 @@
                             Data="M280-720v520-520Zm170 600H280q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v172q-17-5-39.5-8.5T680-560v-160H280v520h132q6 21 16 41.5t22 38.5Zm-90-160h40q0-63 20-103.5l20-40.5v-216h-80v360Zm160-230q17-11 38.5-22t41.5-16v-92h-80v130Zm18.5 371.5Q480-197 480-280t58.5-141.5Q597-480 680-480t141.5 58.5Q880-363 880-280t-58.5 141.5Q763-80 680-80t-141.5-58.5ZM746-186l28-28-74-74v-112h-40v128l86 86Z" Fill="{DynamicResource ArBrush.TextDim}"/>
                     </Viewbox>
                   </Button>
-                </Grid>
+                  </Grid>
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>

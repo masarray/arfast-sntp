@@ -76,8 +76,20 @@ internal static class NtpProtocol
         DateTimeOffset t1 = DateTimeOffset.UtcNow;
         WriteTimestamp(request.AsSpan(40, 8), t1);
         var timer = Stopwatch.StartNew();
-        await socket.SendAsync(request, timeout.Token);
-        UdpReceiveResult result = await socket.ReceiveAsync(timeout.Token);
+        UdpReceiveResult result;
+        try
+        {
+            await socket.SendAsync(request, timeout.Token);
+            result = await socket.ReceiveAsync(timeout.Token);
+        }
+        catch (OperationCanceledException ex) when (
+            !cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            // Only classify an actual receive deadline as a timeout. A
+            // user cancellation or clock sample rejection is not "No reply".
+            throw new NtpResponseTimeoutException(
+                socket.Client.LocalEndPoint as IPEndPoint, server, ex);
+        }
         timer.Stop();
         DateTimeOffset actualReceive = DateTimeOffset.UtcNow;
         if (ClockDiscontinuity.Detected(t1, actualReceive, timer.Elapsed))

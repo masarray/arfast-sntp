@@ -1,3 +1,18 @@
+### v0.10.1 visual/ARSAS acceptance
+
+- [ ] Add/Remove modal vertically content-sized at 100/125/150/200% DPI;
+  no blank bottom; matched button widths and right-aligned actions.
+- [ ] One row PC Time + Sync, one dominant NTP grid with centered Use/#,
+  aligned stratum, offset and server time in up to 16 rows.
+- [ ] Hover status shows actual local Windows client IP:UDP source port and
+  remote NTP server IP:123 on timeout, for packet-capture correlation.
+- [ ] Confirm raw ARSAS Mode 4 send reaches the UDP receive path rather
+  than merely being transmitted from the same Windows host's Npcap NIC.
+- [ ] Synthetic stratum 2/LOCL ARSAS reply parses; unsynchronized LI=3
+  cannot be accepted for time correction.
+- [ ] History uses compact time, tooltip retains raw full-resolution event.
+- [ ] IPC, Windows Service startup and multi-peer election remain unchanged.
+
 > **v0.10.0 update:** The multi-NTP architecture in
 > [MULTI-NTP-ARCHITECTURE.md](MULTI-NTP-ARCHITECTURE.md) supersedes the
 > historical single-server Studio/2-byte toggle descriptions below.

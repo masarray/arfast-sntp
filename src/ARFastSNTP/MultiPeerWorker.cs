@@ -256,11 +256,14 @@ internal sealed class MultiPeerWorker : BackgroundService
             string nextState = ex is NtpKissOfDeathException kod &&
                 kod.Code is "DENY" or "RSTR" ? "Denied" : "No reply";
             if (rt.State != nextState)
-                rt.PendingEvent = address + ": " + (ex is OperationCanceledException
-                    ? "No reply (UDP 123 timeout)." : ex.Message);
+                rt.PendingEvent = address + ": " +
+                    (ex is NtpResponseTimeoutException or OperationCanceledException
+                        ? "No UDP reply at the Windows socket." : ex.Message);
             rt.State = nextState;
+            // Detailed local ephemeral port is available on row hover only.
+            // It is essential for matching a RAW Npcap frame to the socket.
             rt.Error = ex is OperationCanceledException
-                ? "NTP timeout: check IP address and UDP port 123."
+                ? "NTP request timed out. Check network route and UDP 123."
                 : ex.Message;
             // RATE and DENY must not trigger busy-loop retransmission.
             double seconds = ex is NtpKissOfDeathException

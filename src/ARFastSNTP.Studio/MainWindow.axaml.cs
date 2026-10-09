@@ -289,13 +289,45 @@ public sealed partial class MainWindow : Window
         Set(_eventCount, events.Count == 1 ? "1 event" : events.Count + " events");
         _history.Children.Clear();
         if (events.Count == 0) events.Add("No events yet.");
-        foreach (string text in events)
-            _history.Children.Add(new TextBlock
+        foreach (string original in events)
+        {
+            var (stamp, message) = EventDisplay.Format(original);
+            if (stamp.Length == 0)
             {
-                Text = text,
+                _history.Children.Add(new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Foreground = BrushResolver.Require(this, "ArBrush.TextSecondary")
+                });
+                continue;
+            }
+            // One calm timestamp column; keep high-resolution raw event in
+            // tooltip for engineering diagnostics, not visible prose.
+            var line = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("66,*"),
+                ColumnSpacing = 10
+            };
+            line.Children.Add(new TextBlock
+            {
+                Text = stamp,
+                FontSize = 11,
+                Foreground = BrushResolver.Require(this, "ArBrush.TextDim")
+            });
+            var description = new TextBlock
+            {
+                Text = message,
+                FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = BrushResolver.Require(this, "ArBrush.TextSecondary")
-            });
+            };
+            Grid.SetColumn(description, 1);
+            ToolTip.SetTip(description, original);
+            line.Children.Add(description);
+            _history.Children.Add(line);
+        }
     }
 
     private async Task ChangePeerAsync(string action, string address)
@@ -339,7 +371,9 @@ public sealed partial class MainWindow : Window
     private async void AddServer_OnClick(object? sender, RoutedEventArgs e)
     {
         if (!_catalogReady || _editing) return;
-        string? ip = await new AddPeerDialog(this).ShowDialog<string?>(this);
+        string? ip = await new AddPeerDialog(this,
+            Rows.Select(row => row.Address).ToHashSet(StringComparer.Ordinal))
+            .ShowDialog<string?>(this);
         if (!string.IsNullOrWhiteSpace(ip))
             await ChangePeerAsync("add", ip);
     }

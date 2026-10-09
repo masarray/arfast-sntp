@@ -87,3 +87,25 @@ The PR remains Draft until those gates are met.
 
 License: [GPL-2.0-or-later](LICENSE), with Arssyut token provenance in
 [docs/DESIGN-TOKEN-PROVENANCE.md](docs/DESIGN-TOKEN-PROVENANCE.md).
+
+## v0.10.1 — calm compact UX and RAW-mode diagnostics
+
+- The title bar owns the application name. A single short PC Time/Sync
+  strip remains above the NTP Explorer.
+- The server table has one shared numeric layout, consistent column/header
+  alignment, 13-DIP readable value typography, bounded height, and subtle
+  hover only. Event History shows local `HH:mm:ss` plus the event; complete
+  timestamp/error text remains in tooltips.
+- Add and Remove windows use a shared dialog chrome and `SizeToContent`:
+  no fixed-height blank space. The Add dialog rejects empty/invalid and
+  duplicate IP addresses without closing and supports Enter/Escape.
+- A Windows UDP timeout now retains the **local UDP IP:ephemeral port**
+  and expected remote server `IP:123` in peer status diagnostics. It does
+  not count a Npcap RAW injection by ARSAS as an accepted NTP reply.
+- For ARSAS same-host/interoperability diagnosis, follow
+  [ARSAS-NTP-INTEROP.md](docs/ARSAS-NTP-INTEROP.md). In particular,
+  `192.16.1.33` is the configured ARSAS server in the supplied log,
+  while `192.16.1.255` is a broadcast target, not a unicast NTP server.
+  Source IP/port + NTP originate must match the exact AR Fast SNTP request.
+- **No changes** to the server election, clock-step thresholds, service
+  installation or source IPC commands in this visual/diagnostic milestone.

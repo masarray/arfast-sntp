@@ -385,5 +385,28 @@ Check("per-peer multi status parses in Studio and legacy dashboard",
     ui is not null && ui.Peers.Length == 1 &&
     ui.Peers[0].Selected && ui.SelectedServer == "192.16.1.175");
 
+// ARSAS advertises SNTPv4 Mode 4, stratum 2, LOCL reference ID.
+// Once the reply reaches a Windows UDP socket these values alone must
+// not be treated as invalid or incompatible by the client parser.
+var arsasCompatible = (byte[])replyBytes.Clone();
+arsasCompatible[0] = 0x24;
+arsasCompatible[1] = 2;
+arsasCompatible[12] = (byte)'L';
+arsasCompatible[13] = (byte)'O';
+arsasCompatible[14] = (byte)'C';
+arsasCompatible[15] = (byte)'L';
+var arsasSample = NtpProtocol.Parse(requestBytes, arsasCompatible,
+    referenceTime, referenceTime.AddMilliseconds(30), 2026);
+Check("ARSAS Mode 4 stratum 2 LOCL packet is protocol-compatible",
+    arsasSample.Stratum == 2);
+var invalidLeap = (byte[])arsasCompatible.Clone();
+invalidLeap[0] = (byte)(invalidLeap[0] | 0xC0); // LI=3, unsynchronized
+bool invalidClockRejected = false;
+try { _ = NtpProtocol.Parse(requestBytes, invalidLeap,
+    referenceTime, referenceTime.AddMilliseconds(30), 2026); }
+catch (InvalidOperationException) { invalidClockRejected = true; }
+Check("ARSAS unsynchronized LI=3 packet must not set Windows clock",
+    invalidClockRejected);
+
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

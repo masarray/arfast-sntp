@@ -16,6 +16,23 @@
     <Setter Property="FontSize" Value="{DynamicResource ArType.Micro}" />
     <Setter Property="Foreground" Value="{DynamicResource ArBrush.TextDim}" />
   </Style>
+  <!-- Table type scale is above metadata but below the primary section title.
+       Left/right/center alignment is defined in the Grid for each data type. -->
+  <Style Selector="TextBlock.table-heading">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Foreground" Value="{DynamicResource ArBrush.TextSecondary}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="TextBlock.table-value">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Regular" />
+  </Style>
+  <Style Selector="Border.ntp-row">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.ntp-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ArBrush.Surface2}" />
+  </Style>
   <Style Selector="TextBlock.muted">
     <Setter Property="Foreground" Value="{DynamicResource ArBrush.TextSecondary}" />
   </Style>
@@ -75,5 +92,8 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{DynamicResource ArRadius.MD}" />
     <Setter Property="Foreground" Value="{DynamicResource ArBrush.Text}" />
+  </Style>
+  <Style Selector="TextBox.ar-input:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource ArBrush.Success}" />
   </Style>
 </Styles>
