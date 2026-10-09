@@ -176,7 +176,9 @@ internal sealed class DashboardForm : Form
             if (valid && root.GetProperty("EstimatedServerUtc").ValueKind == JsonValueKind.String)
             {
                 // Approximate server clock; never use it to set Windows time.
-                _serverEstimate = root.GetProperty("EstimatedServerUtc").GetDateTimeOffset();
+                // The snapshot estimate applies at UpdatedUtc, not when the GUI reads the file.
+                _serverEstimate = root.GetProperty("EstimatedServerUtc").GetDateTimeOffset()
+                    .AddSeconds(age);
                 _estimateTimer.Restart();
             }
             else
@@ -188,6 +190,7 @@ internal sealed class DashboardForm : Form
         catch (IOException)
         {
             _status.Text = "Waiting for AR Fast SNTP worker...";
+            _serverEstimate = null;
             SetLamp(_serverLamp, false, "ONLINE");
             SetLamp(_responseLamp, false, "VALID");
             SetLamp(_syncLamp, false, "SYNCED");
@@ -195,10 +198,18 @@ internal sealed class DashboardForm : Form
         catch (JsonException)
         {
             _status.Text = "Status snapshot not yet readable.";
+            _serverEstimate = null;
+            SetLamp(_serverLamp, false, "ONLINE");
+            SetLamp(_responseLamp, false, "VALID");
+            SetLamp(_syncLamp, false, "SYNCED");
         }
         catch (UnauthorizedAccessException)
         {
             _status.Text = "Cannot read status file; check service permissions.";
+            _serverEstimate = null;
+            SetLamp(_serverLamp, false, "ONLINE");
+            SetLamp(_responseLamp, false, "VALID");
+            SetLamp(_syncLamp, false, "SYNCED");
         }
     }
 }

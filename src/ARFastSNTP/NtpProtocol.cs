@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Text;
 using System.Net;
 using System.Net.Sockets;
 
@@ -28,11 +29,15 @@ internal static class NtpProtocol
         int mode = bytes[0] & 7, version = (bytes[0] >> 3) & 7, leap = bytes[0] >> 6;
         if (mode != 4 || version is < 3 or > 4 || leap == 3)
             throw new InvalidOperationException("Peer is not a synchronized unicast NTP server.");
-        if (bytes[1] == 0)
-            throw new InvalidOperationException("NTP Kiss-o'-Death / server unavailable (backoff required).");
-        if (bytes[1] > 15) throw new InvalidOperationException("Invalid server stratum.");
+        // Check transaction binding before obeying even an NTP rate-limit/deny response.
         if (!bytes.Slice(24, 8).SequenceEqual(request.Slice(40, 8)))
             throw new InvalidOperationException("Unmatched NTP originate timestamp.");
+        if (bytes[1] == 0)
+        {
+            string code = Encoding.ASCII.GetString(bytes.Slice(12, 4));
+            throw new NtpKissOfDeathException(code);
+        }
+        if (bytes[1] > 15) throw new InvalidOperationException("Invalid server stratum.");
         var reference = new DateTimeOffset(serverYear, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var t2 = Read(bytes.Slice(32, 8), reference);
         var t3 = Read(bytes.Slice(40, 8), reference);

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ARFastSNTP;
 
-/// <summary>Single owner of polling and time correction; no parallel setters or unbounded queues.</summary>
+/// <summary>One async worker owns SNTP polling, correction and bounded dashboard snapshots.</summary>
 internal sealed class SyncWorker : BackgroundService
 {
     private readonly SyncOptions _options;
@@ -13,6 +13,9 @@ internal sealed class SyncWorker : BackgroundService
     private readonly Queue<string> _corrections = new();
     private long _requests, _accepted, _rejected;
     private DateTimeOffset? _lastCorrection;
+    private long _lastStepStamp;
+    private bool _pendingVerification;
+    private bool _validatedBaseline;
 
     internal SyncWorker(SyncOptions options, ILogger<SyncWorker> logger)
     {
@@ -23,75 +26,123 @@ internal sealed class SyncWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         int failures = 0;
-        _logger.LogInformation("SNTP service started; server={Server}, clock stepping={Step}",
+        _logger.LogInformation("SNTP worker started; peer={Peer}, step enabled={Step}",
             _options.Server, _options.AllowStep);
         while (!stoppingToken.IsCancellationRequested)
         {
-            DateTimeOffset batchStartUtc = DateTimeOffset.UtcNow;
+            var batchStartUtc = DateTimeOffset.UtcNow;
             var batchClock = Stopwatch.StartNew();
             try
             {
-                var samples = new SntpSample[3];
-                for (int i = 0; i < samples.Length; i++)
+                SntpSample first = await QueryCountedAsync(stoppingToken);
+                SntpSample measured = first;
+                bool burst = PollPolicy.RequiresBurst(_validatedBaseline, first);
+                if (burst)
                 {
-                    _requests++;
-                    try
-                    {
-                        samples[i] = await NtpProtocol.QueryAsync(_options.Server,
-                            _options.ServerYear, stoppingToken);
-                        _accepted++;
-                    }
-                    catch
-                    {
-                        _rejected++;
-                        throw;
-                    }
-                    if (i < samples.Length - 1)
-                        await Task.Delay(150, stoppingToken);
+                    await Task.Delay(100, stoppingToken);
+                    SntpSample second = await QueryCountedAsync(stoppingToken);
+                    await Task.Delay(100, stoppingToken);
+                    SntpSample third = await QueryCountedAsync(stoppingToken);
+                    measured = PollPolicy.MedianCoherent(first, second, third);
                 }
+
+                // Never apply an offset derived from samples spanning a wall-clock discontinuity.
                 if (ClockDiscontinuity.Detected(batchStartUtc, DateTimeOffset.UtcNow,
                     batchClock.Elapsed))
-                    throw new InvalidOperationException("PC clock changed during sample batch.");
-                Array.Sort(samples, (a, b) => a.Offset.CompareTo(b.Offset));
-                if ((samples[2].Offset - samples[0].Offset).Duration() >
-                    TimeSpan.FromMilliseconds(250))
-                    throw new InvalidOperationException("NTP measurements disagree (>250ms).");
+                    throw new InvalidOperationException("Windows clock changed during poll batch.");
 
-                var median = samples[1];
-                var offset = median.Offset;
-                // Estimate server time before any local clock adjustment.
-                DateTimeOffset serverUtc = DateTimeOffset.UtcNow + offset;
-                string state = offset.Duration() <= TimeSpan.FromMilliseconds(100)
-                    ? "Synchronized" : "Offset detected";
+                _validatedBaseline = true;
+                bool synchronized = PollPolicy.IsSynchronized(measured.Offset);
+                DateTimeOffset serverUtc = DateTimeOffset.UtcNow + measured.Offset;
+                string state = synchronized ? "Synchronized" : "Offset detected";
                 string? evt = null;
-                if (_options.AllowStep && offset.Duration() > TimeSpan.FromMilliseconds(100))
+
+                if (synchronized && _pendingVerification)
                 {
-                    if (ClockDiscontinuity.Detected(batchStartUtc, DateTimeOffset.UtcNow,
-                        batchClock.Elapsed))
-                        throw new InvalidOperationException("PC clock moved before correction.");
-                    var set = WindowsClock.SetUtc(DateTimeOffset.UtcNow + offset);
-                    evt = set.Success
-                        ? $"Clock stepped by {offset.TotalMilliseconds:+0.0;-0.0;0} ms; verification pending."
-                        : $"Clock correction failed (Win32 {set.Error}).";
-                    state = set.Success ? "Correcting" : "Correction failed";
-                    _lastCorrection = DateTimeOffset.UtcNow;
+                    _pendingVerification = false;
+                    evt = "Previous clock correction verified by fresh SNTP samples.";
                     Remember(evt);
-                    _logger.LogWarning("{ClockEvent}", evt);
+                    _logger.LogInformation("{Event}", evt);
+                }
+                else if (_options.AllowStep && !synchronized)
+                {
+                    // One owner, minimum correction interval measured with monotonic time.
+                    // A suspicious sample is ALWAYS corroborated by three SNTP exchanges.
+                    if (!burst)
+                        throw new InvalidOperationException("Unverified correction request.");
+                    if (_lastStepStamp != 0 &&
+                        Stopwatch.GetElapsedTime(_lastStepStamp) < PollPolicy.StepCooldown)
+                    {
+                        state = "Verifying";
+                    }
+                    else
+                    {
+                        if (ClockDiscontinuity.Detected(batchStartUtc, DateTimeOffset.UtcNow,
+                            batchClock.Elapsed))
+                            throw new InvalidOperationException("Windows time moved before correction.");
+                        var set = WindowsClock.SetUtc(DateTimeOffset.UtcNow + measured.Offset);
+                        evt = set.Success
+                            ? $"Clock stepped by {measured.Offset.TotalMilliseconds:+0.0;-0.0;0.0} ms; verifying."
+                            : $"Clock correction FAILED (Win32 {set.Error}).";
+                        state = set.Success ? "Correcting" : "Correction failed";
+                        if (set.Success)
+                        {
+                            _lastCorrection = DateTimeOffset.UtcNow;
+                            _lastStepStamp = Stopwatch.GetTimestamp();
+                            _pendingVerification = true;
+                            _validatedBaseline = false; // Re-establish coherent post-step samples.
+                        }
+                        Remember(evt);
+                        _logger.LogWarning("{Event}", evt);
+                    }
                 }
 
                 failures = 0;
                 Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
-                    state, offset.TotalMilliseconds, median.RttMs, serverUtc, evt)
+                    state, measured.Offset.TotalMilliseconds, measured.RttMs, serverUtc, evt)
                 {
-                    Stratum = median.Stratum, LastCorrectionUtc = _lastCorrection
+                    Stratum = measured.Stratum, LastCorrectionUtc = _lastCorrection
                 });
-                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
+                await Task.Delay(PollPolicy.NextInterval(synchronized, _options.AllowStep),
+                    stoppingToken);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (NtpKissOfDeathException ex) when (ex.Code is "DENY" or "RSTR")
+            {
+                _validatedBaseline = false;
+                _logger.LogError("NTP peer permanently denied polling: {Code}", ex.Code);
+                Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
+                    "Server denied", null, null, null, ex.Message)
+                { LastCorrectionUtc = _lastCorrection });
+                // Remain visible to the GUI without sending additional NTP requests.
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try { await Task.Delay(PollPolicy.StableInterval, stoppingToken); }
+                    catch (OperationCanceledException) { break; }
+                    Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
+                        "Server denied", null, null, null, ex.Message)
+                    { LastCorrectionUtc = _lastCorrection });
+                }
+                break; // A denied peer is not polled again until service restart.
+            }
+            catch (NtpKissOfDeathException ex) when (ex.Code == "RATE")
+            {
+                _validatedBaseline = false;
+                _logger.LogWarning("NTP server requested rate backoff.");
+                Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
+                    "Rate limited", null, null, null, ex.Message)
+                { LastCorrectionUtc = _lastCorrection });
+                try { await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken); }
+                catch (OperationCanceledException) { break; }
+            }
             catch (Exception ex)
             {
+                _validatedBaseline = false;
                 failures = Math.Min(failures + 1, 5);
-                _logger.LogWarning("SNTP sample rejected: {Reason}", ex.Message);
+                _logger.LogWarning("SNTP poll rejected: {Reason}", ex.Message);
                 Publish(new StatusSnapshot(DateTimeOffset.UtcNow, _options.Server.ToString(),
                     "Offline / rejected", null, null, null, ex.Message)
                 { LastCorrectionUtc = _lastCorrection });
@@ -105,10 +156,27 @@ internal sealed class SyncWorker : BackgroundService
         }
     }
 
-    private void Remember(string text)
+    private async Task<SntpSample> QueryCountedAsync(CancellationToken cancellationToken)
+    {
+        _requests++;
+        try
+        {
+            SntpSample response = await NtpProtocol.QueryAsync(_options.Server,
+                _options.ServerYear, cancellationToken);
+            _accepted++;
+            return response;
+        }
+        catch
+        {
+            _rejected++;
+            throw;
+        }
+    }
+
+    private void Remember(string value)
     {
         if (_corrections.Count == 16) _corrections.Dequeue();
-        _corrections.Enqueue($"{DateTimeOffset.Now:O} {text}");
+        _corrections.Enqueue($"{DateTimeOffset.Now:O} {value}");
     }
 
     private void Publish(StatusSnapshot snapshot)
@@ -116,8 +184,7 @@ internal sealed class SyncWorker : BackgroundService
         snapshot = snapshot with
         {
             RequestCount = _requests, AcceptedCount = _accepted, RejectedCount = _rejected,
-            StepEnabled = _options.AllowStep,
-            RecentCorrections = _corrections.ToArray()
+            StepEnabled = _options.AllowStep, RecentCorrections = _corrections.ToArray()
         };
         try
         {
@@ -126,13 +193,13 @@ internal sealed class SyncWorker : BackgroundService
             string temporary = _options.StatusPath + ".tmp";
             File.WriteAllText(temporary, StatusSnapshot.Serialize(snapshot),
                 new UTF8Encoding(false));
-            File.Move(temporary, _options.StatusPath, true); // Atomic same-volume replacement.
+            File.Move(temporary, _options.StatusPath, true);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Cannot write status file {Path}", _options.StatusPath);
+            _logger.LogError(ex, "Cannot write SNTP status {Path}", _options.StatusPath);
         }
-        _logger.LogInformation("SNTP {State}; offset={Offset}ms RTT={Rtt}ms",
+        _logger.LogDebug("SNTP {State}, offset={Offset}ms RTT={Rtt}ms",
             snapshot.State, snapshot.OffsetMilliseconds, snapshot.RoundTripMilliseconds);
     }
 }

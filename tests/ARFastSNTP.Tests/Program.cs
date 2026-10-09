@@ -82,5 +82,51 @@ static bool RejectStepWithoutCertification()
     try { SyncOptions.Parse(new[] { "--server", "192.16.1.175", "--allow-step" }); return false; }
     catch (ArgumentException) { return true; }
 }
+
+Check("initial sample is burst verified", PollPolicy.RequiresBurst(false, measured));
+Check("stable sample uses single exchange", !PollPolicy.RequiresBurst(true, measured));
+Check("large drift triggers burst", PollPolicy.RequiresBurst(true,
+    new SntpSample(TimeSpan.FromDays(365), 12, 1)));
+Check("stable interval bounded to 3s",
+    PollPolicy.NextInterval(true, true) == TimeSpan.FromSeconds(3));
+Check("monitor large offset backs off to 5s",
+    PollPolicy.NextInterval(false, false) == TimeSpan.FromSeconds(5));
+Check("correction cycle fast 1s",
+    PollPolicy.NextInterval(false, true) == TimeSpan.FromSeconds(1));
+Check("valid coherent burst median", PollPolicy.MedianCoherent(
+    new SntpSample(TimeSpan.FromMilliseconds(8), 15, 1),
+    new SntpSample(TimeSpan.FromMilliseconds(7), 12, 1),
+    new SntpSample(TimeSpan.FromMilliseconds(9), 14, 1)).Offset ==
+        TimeSpan.FromMilliseconds(8));
+bool spreadRejected = false;
+try
+{
+    PollPolicy.MedianCoherent(
+        new SntpSample(TimeSpan.FromMilliseconds(0), 12, 1),
+        new SntpSample(TimeSpan.FromMilliseconds(1), 12, 1),
+        new SntpSample(TimeSpan.FromMilliseconds(800), 12, 1));
+}
+catch (InvalidOperationException) { spreadRejected = true; }
+Check("disagreeing burst rejected", spreadRejected);
+replyBytes[0] = 0x24;
+replyBytes[1] = 0; // Server KoD RATE must never be treated as valid time.
+"RATE"u8.CopyTo(replyBytes.AsSpan(12, 4));
+bool rateKoD = false;
+try { NtpProtocol.Parse(requestBytes, replyBytes, referenceTime,
+    referenceTime.AddMilliseconds(30), 2026); }
+catch (NtpKissOfDeathException ex) { rateKoD = ex.Code == "RATE"; }
+Check("NTP RATE Kiss-o'-Death recognized", rateKoD);
+replyBytes[0] = 0x24;
+replyBytes[1] = 1;
+// Server 2026, local Windows manually shifted to 2023: offset is large but computable.
+var localT1 = new DateTimeOffset(2023, 10, 9, 8, 0, 0, TimeSpan.Zero);
+NtpProtocol.WriteTimestamp(requestBytes.AsSpan(40, 8), localT1);
+requestBytes.AsSpan(40, 8).CopyTo(replyBytes.AsSpan(24, 8));
+NtpProtocol.WriteTimestamp(replyBytes.AsSpan(32, 8), referenceTime.AddMilliseconds(10));
+NtpProtocol.WriteTimestamp(replyBytes.AsSpan(40, 8), referenceTime.AddMilliseconds(11));
+var shiftedSample = NtpProtocol.Parse(requestBytes, replyBytes, localT1,
+    localT1.AddMilliseconds(22), 2026);
+Check("multi-year Windows clock offset survives NTP parsing",
+    shiftedSample.Offset > TimeSpan.FromDays(1000));
 Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
