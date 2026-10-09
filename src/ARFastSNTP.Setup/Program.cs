@@ -50,8 +50,16 @@ internal static class Program
                 InstallerOperations.ValidateBundle(AppContext.BaseDirectory);
                 Environment.ExitCode = 0;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                // Windows-subsystem EXE has no reliable console stderr.
+                // Keep a deterministic diagnostic beside the bundle for CI and users.
+                try
+                {
+                    File.WriteAllText(Path.Combine(AppContext.BaseDirectory,
+                        "setup-validation-error.txt"), ex.ToString());
+                }
+                catch (Exception) { }
                 Environment.ExitCode = 2;
             }
             return;

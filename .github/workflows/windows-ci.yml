@@ -79,8 +79,14 @@ jobs:
               throw "Wrapper still depends on PowerShell: $file"
             }
           }
-          & (Join-Path $PWD 'publish/ARFastSNTP.Setup.exe') --verify-package
-          if ($LASTEXITCODE -ne 0) { throw 'Offline Windows bundle integrity verification failed' }
+          $setupExe = Join-Path $PWD 'publish/ARFastSNTP.Setup.exe'
+          $verify = Start-Process -FilePath $setupExe -ArgumentList '--verify-package' -PassThru -Wait
+          if ($verify.ExitCode -ne 0) {
+            $errorFile = Join-Path $PWD 'publish/setup-validation-error.txt'
+            if (Test-Path $errorFile) { Get-Content -LiteralPath $errorFile }
+            Get-ChildItem publish -Recurse | Select-Object FullName,Length | Out-String | Write-Host
+            throw "Offline Windows bundle verification failed (exit $($verify.ExitCode))"
+          }
       - name: Upload Windows artifact (one per PR batch)
         uses: actions/upload-artifact@v4
         with:

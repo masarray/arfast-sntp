@@ -21,6 +21,7 @@ internal static class InstallerOperations
     internal static readonly string InstalledDashboard =
         Path.Combine(InstallRoot, "dashboard", "ARFastSNTP.Dashboard.exe");
     private static readonly string ScExe = Path.Combine(
+        Environment.GetEnvironmentVariable("SystemRoot") ??
         Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "sc.exe");
     internal static readonly string SetupLog = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -43,7 +44,12 @@ internal static class InstallerOperations
             if (!File.Exists(Path.Combine(folder, relative)))
                 throw new FileNotFoundException("Incomplete extracted artifact: missing " + relative);
         }
-        if (!File.Exists(ScExe)) throw new FileNotFoundException("Windows Service Control utility missing.", ScExe);
+    }
+
+    private static void EnsureServiceControlAvailable()
+    {
+        if (!File.Exists(ScExe))
+            throw new FileNotFoundException("Windows Service Control utility missing: " + ScExe, ScExe);
     }
 
     internal static string? ExistingServiceImage()
@@ -57,6 +63,7 @@ internal static class InstallerOperations
     {
         if (!IsAdministrator()) throw new UnauthorizedAccessException("Administrator privileges required.");
         ValidateBundle(bundle);
+        EnsureServiceControlAvailable();
         if (ExistingServiceImage() is not null)
             throw new InvalidOperationException(
                 "Service ARFastSNTP is already registered. Click REMOVE SERVICE first; existing settings were preserved.");
@@ -158,6 +165,7 @@ internal static class InstallerOperations
     internal static void Remove(Action<string> report)
     {
         if (!IsAdministrator()) throw new UnauthorizedAccessException("Administrator privileges required.");
+        EnsureServiceControlAvailable();
         string? image = ExistingServiceImage();
         if (image is not null)
         {
