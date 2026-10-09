@@ -12,13 +12,13 @@ internal sealed record StatusSnapshot(
     DateTimeOffset? EstimatedServerUtc,
     string? LastEvent)
 {
-    internal long RequestCount { get; init; }
-    internal long AcceptedCount { get; init; }
-    internal long RejectedCount { get; init; }
-    internal byte? Stratum { get; init; }
-    internal DateTimeOffset? LastCorrectionUtc { get; init; }
-    internal bool StepEnabled { get; init; }
-    internal string Broadcast { get; init; } = "Not measured";
-    internal string[] RecentCorrections { get; init; } = Array.Empty<string>();
+    public long RequestCount { get; init; }
+    public long AcceptedCount { get; init; }
+    public long RejectedCount { get; init; }
+    public byte? Stratum { get; init; }
+    public DateTimeOffset? LastCorrectionUtc { get; init; }
+    public bool StepEnabled { get; init; }
+    public string Broadcast { get; init; } = "Not measured";
+    public string[] RecentCorrections { get; init; } = Array.Empty<string>();
     internal static string Serialize(StatusSnapshot value) => JsonSerializer.Serialize(value);
 }

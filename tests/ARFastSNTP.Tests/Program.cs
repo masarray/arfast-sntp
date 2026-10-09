@@ -158,6 +158,15 @@ var normalizedStatus = StatusSnapshot.Serialize(new StatusSnapshot(
     testUtc, "192.16.1.175", "Synchronized", 12.5, 3.2,
     testUtc.AddMilliseconds(12.5), null)
 { StepEnabled = false, RequestCount = 8, AcceptedCount = 7, RejectedCount = 1 });
+using var statusDocument = System.Text.Json.JsonDocument.Parse(normalizedStatus);
+var statusFields = statusDocument.RootElement;
+Check("worker JSON includes counters and StepEnabled",
+    statusFields.TryGetProperty("AcceptedCount", out var acceptedField) &&
+    acceptedField.GetInt64() == 7 &&
+    statusFields.TryGetProperty("RequestCount", out var requestsField) &&
+    requestsField.GetInt64() == 8 &&
+    statusFields.TryGetProperty("StepEnabled", out var allowField) &&
+    allowField.ValueKind == System.Text.Json.JsonValueKind.False);
 bool currentParsed = ARFastSNTP.Dashboard.DashboardStatus.TryParse(
     normalizedStatus, out var current, out _);
 Check("current worker status parsed and lamps valid", currentParsed && current is not null &&
