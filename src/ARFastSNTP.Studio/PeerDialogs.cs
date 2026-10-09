@@ -18,7 +18,7 @@ internal sealed class AddPeerDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = BrushResolver.Require(owner, "ArBrush.Canvas");
         FontFamily = owner.FontFamily;
-        var ip = new TextBox { Watermark = "e.g. 192.16.1.175", Text = "",
+        var ip = new TextBox { PlaceholderText = "e.g. 192.16.1.175", Text = "",
             MinHeight = 33 };
         var hint = new TextBlock { Text = "Enter an IPv4 address",
             Foreground = BrushResolver.Require(owner, "ArBrush.TextSecondary") };
