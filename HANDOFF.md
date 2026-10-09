@@ -21,10 +21,17 @@
   **ARFastSNTP-Setup-Windows-x64.exe**.
 - PR is **DRAFT, UNMERGED**. Keep main untouched unless user explicitly
   directs merge after Windows acceptance. Never reset to an older branch.
-- Documentation-only changes to README/HANDOFF/docs do **not** trigger the
-  expensive Windows CI: workflow paths explicitly include only src, tests,
-  installer, tools, LICENSE, NOTICE and the workflow file. Do not trigger a
-  redundant CI for this transfer note.
+- **GitHub PR CI caveat confirmed:** even when a commit changes only
+  README/HANDOFF/docs, the workflow pull_request paths filter can run again
+  because GitHub evaluates the entire PR diff against main. A docs-only
+  synchronization commit unexpectedly started CI #32 (run 38006646420).
+  It is REDUNDANT for code verification and must not be described as a
+  regression. The GitHub connector available in this thread cannot cancel
+  workflow runs; cancel it in GitHub UI if still active.
+- For future documentation-only PR commits, use GitHub-supported commit
+  message marker [skip ci] or change documentation in a PR comment instead
+  of assuming that paths filters prevent a run. Be aware skipped required
+  checks may remain pending depending on branch protection.
 - **CI proves compilation/regression/worker smoke/installer packaging; it
   does NOT prove actual multi-NTP sync, Npcap interop, in-place upgrade,
   clock stepping, or visual Windows/DPI behavior.**
@@ -267,8 +274,10 @@ promote Draft PR or public release until user validates acceptance.
 CI economy: batch a coherent set of fixes per code commit, verify locally
 or logically before push, use existing windows-ci.yml fail-fast +
 concurrency cancellation. Do not repeatedly poll CI every second or
-force workflow runs for documentation-only changes. Existing CI
-paths excludes README and docs, so this handoff itself needs no build.
+force workflow runs for documentation-only changes. **PR-wide path filters
+are not a reliable way to suppress docs-only synchronization runs**:
+prefer a PR comment or the [skip ci] commit marker after assessing the
+impact on required-check status.
 
 ## 8. Do not erase progress / handoff completion requirements
 
