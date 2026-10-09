@@ -185,7 +185,7 @@ public sealed partial class MainWindow : Window
 
             if (_lastFileChange.Elapsed > TimeSpan.FromSeconds(12))
             {
-                ShowUnavailable("Sync service is not responding.");
+                ShowUnavailable("Waiting for a fresh NTP update.");
                 return;
             }
 
@@ -254,7 +254,14 @@ public sealed partial class MainWindow : Window
     {
         var events = (snap.RecentCorrections ?? Array.Empty<string>())
             .Where(s => !string.IsNullOrWhiteSpace(s))
-            .TakeLast(16).Reverse().ToArray();
+            .TakeLast(16).Reverse().ToList();
+        // An unreachable server has no correction events. Preserve the actual
+        // last error in the expanded History instead of showing an empty panel.
+        if (!string.IsNullOrWhiteSpace(snap.LastEvent) &&
+            !events.Any(entry => entry.Contains(snap.LastEvent,
+                StringComparison.Ordinal)))
+            events.Insert(0, snap.LastEvent);
+        if (events.Count > 16) events.RemoveAt(events.Count - 1);
         string signature = string.Join("\n", events);
         if (string.Equals(signature, _lastEventsSignature, StringComparison.Ordinal))
             return;
@@ -265,7 +272,7 @@ public sealed partial class MainWindow : Window
         {
             _historyEvents.Children.Add(new TextBlock
             {
-                Text = "No corrections yet.",
+                Text = "No events yet.",
                 Foreground = BrushResolver.Require(this, "ArBrush.TextSecondary")
             });
             return;
@@ -288,9 +295,9 @@ public sealed partial class MainWindow : Window
         _serverClock.Reset();
         _peerAddress.Text = _lastKnownServer;
         _globalLamp.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
-        _globalStatus.Text = "Unavailable";
+        _globalStatus.Text = _configuredEnabled ? "No reply" : "Disabled";
         _syncLamp.Foreground = BrushResolver.Require(this, "ArBrush.Warning");
-        _syncState.Text = _configuredEnabled ? "No connection"
+        _syncState.Text = _configuredEnabled ? "Not synced"
             : _serviceInstalled ? "Disabled" : "Not installed";
         _syncDetail.Text = message;
         _peerHealth.Text = "● Offline";

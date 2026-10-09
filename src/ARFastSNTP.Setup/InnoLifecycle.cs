@@ -177,8 +177,16 @@ internal static class InnoLifecycle
             }
             catch (Exception healthError)
             {
+                // Observation must not roll back a successfully started service.
                 report("Service active; sync check unavailable: " + healthError.Message);
-                SourceServiceControl.WriteInstallResult(SourceServiceControl.Health.Waiting);
+                try
+                {
+                    SourceServiceControl.WriteInstallResult(SourceServiceControl.Health.Waiting);
+                }
+                catch (Exception statusError)
+                {
+                    report("Optional installer status file unavailable: " + statusError.Message);
+                }
             }
             // Cosmetic cleanup is deliberately non-fatal to the validated service.
             try { LegacyShortcutCleanup.Reconcile(report); }

@@ -141,13 +141,15 @@ begin
 end;
 
 procedure CurPageChanged(PageID: Integer);
-var Health: String;
+var
+  Health: String;
+  RawHealth: AnsiString;
 begin
   if PageID <> wpFinished then Exit;
   Health := 'WAITING';
   if LoadStringFromFile(
-    ExpandConstant('{commonappdata}\ARFastSNTP\install-result.txt'), Health) then
-    Health := Trim(Health);
+    ExpandConstant('{commonappdata}\ARFastSNTP\install-result.txt'), RawHealth) then
+    Health := Trim(String(RawHealth));
   if ExpandConstant('{param:LABSYNC|1}') = '0' then
   begin
     WizardForm.FinishedHeadingLabel.Caption := 'NTP monitoring is ready';
