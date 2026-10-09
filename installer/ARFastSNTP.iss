@@ -164,8 +164,8 @@ begin
   else if Health = 'REPLY' then
   begin
     WizardForm.FinishedHeadingLabel.Caption := 'NTP service is running';
-    WizardForm.FinishedLabel.Caption := 'NTP server responded. PC time is still being checked.' +
-      #13#10 + 'Open the monitor to see progress.';
+    WizardForm.FinishedLabel.Caption := 'NTP server responded. PC time is still being checked.' + #13#10 +
+      'Open the monitor to see progress.';
   end
   else
   begin
