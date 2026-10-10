@@ -177,6 +177,9 @@ internal sealed class MultiPeerWorker : BackgroundService
             if (enabled.Length == 0)
             {
                 _selected = null;
+                // An unverified old correction cannot be 'verified' later
+                // after the operator deliberately disables every source.
+                _pendingVerification = false;
                 TraceDecision(peers, "NTP off", null, "All NTP sources disabled.", null);
                 Publish(peers, "NTP off", null, "All NTP sources disabled.");
                 // Keep the status fresh and the Studio connected while idle,

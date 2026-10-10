@@ -20,7 +20,15 @@ internal sealed class NetworkChangeSignal : IDisposable
     {
         _wake = wake;
         NetworkChange.NetworkAddressChanged += OnAddressChanged;
-        NetworkChange.NetworkAvailabilityChanged += OnAvailabilityChanged;
+        try
+        {
+            NetworkChange.NetworkAvailabilityChanged += OnAvailabilityChanged;
+        }
+        catch
+        {
+            NetworkChange.NetworkAddressChanged -= OnAddressChanged;
+            throw;
+        }
     }
 
     private void OnAddressChanged(object? sender, EventArgs args) => Notify();
