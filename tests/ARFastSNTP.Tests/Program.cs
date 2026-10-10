@@ -608,7 +608,7 @@ try
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
         {
             await Task.Delay(100);
-            if (!DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+            if (!ARFastSNTP.Dashboard.DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
                     out var afterEnable, out _) || afterEnable is null)
                 continue;
             if (afterEnable.RequestCount > 0 && afterEnable.SourceEnabled)
@@ -624,7 +624,7 @@ try
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
         {
             await Task.Delay(100);
-            if (!DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+            if (!ARFastSNTP.Dashboard.DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
                     out var afterDisable, out _) || afterDisable is null)
                 continue;
             if (afterDisable.State == "NTP off" && !afterDisable.SourceEnabled)
