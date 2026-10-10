@@ -27,6 +27,7 @@ internal sealed class MultiPeerWorker : BackgroundService
         internal bool LastProbeInRound;
     }
 
+    private readonly ClockEpochGuard _clockEpoch = new();
     private readonly SyncOptions _options;
     private readonly PeerCatalog _catalog;
     private readonly ILogger<MultiPeerWorker> _logger;
@@ -59,7 +60,18 @@ internal sealed class MultiPeerWorker : BackgroundService
             _options.AllowStep);
         while (!stoppingToken.IsCancellationRequested)
         {
+            // The clock may be changed by Windows Settings, W32Time, or another
+            // process while we are sleeping. A monotonic epoch guard prevents
+            // stale pre-change offsets from ever authorizing a clock step.
+            bool clockChanged = _clockEpoch.Observe(
+                DateTimeOffset.UtcNow, Stopwatch.GetTimestamp());
             var (peers, generation) = _catalog.Snapshot();
+            if (clockChanged)
+            {
+                DiscardSamples();
+                Note("Windows clock changed outside the NTP worker; "
+                    + "discarded previous samples and rechecking.");
+            }
             var current = peers.Select(p => p.Address).ToHashSet(StringComparer.Ordinal);
             foreach (string orphan in _runtime.Keys.Where(ip => !current.Contains(ip)).ToArray())
                 _runtime.Remove(orphan);
@@ -81,8 +93,11 @@ internal sealed class MultiPeerWorker : BackgroundService
             if (enabled.Length == 0)
             {
                 _selected = null;
+                TraceDecision(peers, "NTP off", null, "All NTP sources disabled.", null);
                 Publish(peers, "NTP off", null, "All NTP sources disabled.");
-                try { await _catalog.WaitAsync(TimeSpan.FromHours(12), stoppingToken); }
+                // Keep the status fresh and the Studio connected while idle,
+                // without making a network request or toggling Windows services.
+                try { await _catalog.WaitAsync(PollPolicy.IdleHeartbeatInterval, stoppingToken); }
                 catch (OperationCanceledException) { break; }
                 continue;
             }
@@ -97,6 +112,19 @@ internal sealed class MultiPeerWorker : BackgroundService
                     try { await ProbeAsync(peer.Address, generation, stoppingToken).ConfigureAwait(false); }
                     finally { slots.Release(); }
                 })).ConfigureAwait(false);
+            }
+            // An external Windows clock adjustment between individual NTP
+            // queries must not mix offsets measured in different epochs.
+            if (_clockEpoch.Observe(DateTimeOffset.UtcNow, Stopwatch.GetTimestamp()))
+            {
+                DiscardSamples();
+                Note("Windows clock changed during NTP polling; "
+                    + "discarded measurements and retrying.");
+                TraceDecision(peers, "Verifying", null,
+                    "Clock epoch changed; fresh NTP measurements required.", null);
+                Publish(peers, "Verifying", null,
+                    "Clock epoch changed; fresh NTP measurements required.");
+                continue;
             }
             // Drain per-peer transitions on the single worker thread. Probes
             // must not enqueue UI events concurrently.
@@ -156,6 +184,19 @@ internal sealed class MultiPeerWorker : BackgroundService
                     (_lastStepStamp == 0 ||
                         Stopwatch.GetElapsedTime(_lastStepStamp) >= PollPolicy.StepCooldown))
                 {
+                    // Recheck immediately before the privileged clock write.
+                    // Reject a sample whose UTC epoch changed after election.
+                    if (_clockEpoch.Observe(DateTimeOffset.UtcNow, Stopwatch.GetTimestamp()))
+                    {
+                        DiscardSamples();
+                        Note("Windows clock changed before correction; "
+                            + "unsafe pre-change sample discarded.");
+                        TraceDecision(peers, "Verifying", null,
+                            "External clock change before step; correction held.", null);
+                        Publish(peers, "Verifying", null,
+                            "Clock changed before correction; retrying.");
+                        continue;
+                    }
                     // Selection is bounded to fresh, coherent burst data,
                     // with a generation barrier held through SetSystemTime.
                     if (_catalog.TryStep(chosen, generation,
@@ -168,17 +209,15 @@ internal sealed class MultiPeerWorker : BackgroundService
                         overallState = result.Success ? "Correcting" : "Correction failed";
                         if (result.Success)
                         {
+                            // Expected local adjustment; do not mistake our own
+                            // clock step for a second *external* discontinuity.
+                            _clockEpoch.Reset(DateTimeOffset.UtcNow,
+                                Stopwatch.GetTimestamp());
                             _lastStepStamp = Stopwatch.GetTimestamp();
                             _lastCorrection = DateTimeOffset.UtcNow;
                             _pendingVerification = true;
-                            // All pre-step peer offsets have a different epoch.
-                            foreach (var rt in _runtime.Values)
-                            {
-                                rt.Sample = null;
-                                rt.Streak = 0;
-                                rt.SeenAt = 0;
-                                rt.NextAt = 0;
-                            }
+                            // All pre-step offsets have a different epoch.
+                            DiscardSamples();
                         }
                     }
                 }
@@ -206,6 +245,29 @@ internal sealed class MultiPeerWorker : BackgroundService
                     stoppingToken);
             }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    /// <summary>
+    /// Only the single supervisor calls this after outstanding probes finish.
+    /// Clear the election, verification and all per-peer timestamps together.
+    /// Reset due times so recovery probes are scheduled without waiting for a
+    /// stable-poll interval, while respecting per-query bounded concurrency.
+    /// </summary>
+    private void DiscardSamples()
+    {
+        _selected = null;
+        _pendingVerification = false;
+        foreach (var rt in _runtime.Values)
+        {
+            rt.Sample = null;
+            rt.SeenAt = 0;
+            rt.NextAt = 0;
+            rt.Streak = 0;
+            rt.PendingEvent = null;
+            rt.LastProbeInRound = false;
+            rt.State = "Waiting";
+            rt.Error = null;
         }
     }
 

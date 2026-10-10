@@ -1,4 +1,5 @@
 using ARFastSNTP;
+using System.Diagnostics;
 
 var failures = 0;
 void Check(string label, bool condition)
@@ -40,6 +41,28 @@ Check("clock step during request rejected", ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), TimeSpan.FromMilliseconds(15)));
 Check("normal packet delay accepted", !ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMilliseconds(21), TimeSpan.FromMilliseconds(20)));
+var epoch = new ClockEpochGuard();
+long startStamp = Stopwatch.GetTimestamp();
+DateTimeOffset startUtc = new(2026, 10, 10, 9, 0, 0, TimeSpan.Zero);
+Check("clock epoch initial observation is never a jump",
+    !epoch.Observe(startUtc, startStamp));
+Check("clock epoch accepts normal monotonic passage",
+    !epoch.Observe(startUtc.AddSeconds(2), startStamp + Stopwatch.Frequency * 2));
+Check("clock epoch detects manually advancing Windows by years",
+    epoch.Observe(startUtc.AddYears(3).AddSeconds(3),
+        startStamp + Stopwatch.Frequency * 3));
+Check("clock epoch recovers without repeated false jump",
+    !epoch.Observe(startUtc.AddYears(3).AddSeconds(4),
+        startStamp + Stopwatch.Frequency * 4));
+Check("clock epoch detects manually rewinding the date",
+    epoch.Observe(startUtc.AddSeconds(5), startStamp + Stopwatch.Frequency * 5));
+epoch.Reset(startUtc.AddYears(4), startStamp + Stopwatch.Frequency * 6);
+Check("clock epoch reset suppresses worker-owned step alarm",
+    !epoch.Observe(startUtc.AddYears(4).AddSeconds(1),
+        startStamp + Stopwatch.Frequency * 7));
+Check("all-OFF worker heartbeat precedes Studio's 15s offline watchdog",
+    PollPolicy.IdleHeartbeatInterval > TimeSpan.Zero &&
+    PollPolicy.IdleHeartbeatInterval < TimeSpan.FromSeconds(15));
 using (var gate = new CoalescingGate())
 {
     Check("first refresh enters", await gate.TryEnterAsync(CancellationToken.None));

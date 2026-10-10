@@ -6,6 +6,9 @@ namespace ARFastSNTP;
 /// </summary>
 internal static class PollPolicy
 {
+    // Every 8s while all peers are disabled: below the Studio 15s watchdog.
+    // A coalesced peer-catalog signal wakes sooner; no UDP sockets are opened.
+    internal static readonly TimeSpan IdleHeartbeatInterval = TimeSpan.FromSeconds(8);
     internal static readonly TimeSpan StableInterval = TimeSpan.FromSeconds(3);
     internal static readonly TimeSpan CorrectionInterval = TimeSpan.FromSeconds(1);
     internal static readonly TimeSpan MonitorOffsetInterval = TimeSpan.FromSeconds(5);

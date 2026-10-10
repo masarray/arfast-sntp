@@ -108,7 +108,7 @@ public sealed partial class MainWindow : Window
         if (_ticks % 2 == 0) _ = RefreshStatusAsync();
         if (_ticks % 5 == 0) _ = RefreshCatalogAsync();
         if (_freshness.IsRunning && _freshness.Elapsed > TimeSpan.FromSeconds(15))
-            SetSync("Service offline", false);
+            ShowStaleStatus();
     }
 
     private void UpdatePcClock()
@@ -206,7 +206,7 @@ public sealed partial class MainWindow : Window
             var info = new FileInfo(_statusPath);
             if (!info.Exists || info.Length is <= 0 or > 131072)
             {
-                SetSync("Service offline", false);
+                ShowStaleStatus();
                 return;
             }
             string json = await File.ReadAllTextAsync(_statusPath, _closedToken.Token);
@@ -284,9 +284,20 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
             InvalidOperationException)
         {
-            if (!_closed) SetSync("Service offline", false);
+            if (!_closed) ShowStaleStatus();
         }
         finally { _reading = false; }
+    }
+
+    private void ShowStaleStatus()
+    {
+        // Presence of the responsive peer-control pipe means the worker may
+        // be running even if status.json cannot be read or is stale.
+        SetSync(_catalogReady ? "Status unavailable" : "Service offline", false);
+        _hint.IsVisible = true;
+        Set(_hint, _catalogReady
+            ? "NTP service responds, but live status is stale. Check service logs."
+            : "Cannot reach NTP service. Check Windows Services (ARFastSNTP) and setup.log.");
     }
 
     private void SetSync(string state, bool synced)
