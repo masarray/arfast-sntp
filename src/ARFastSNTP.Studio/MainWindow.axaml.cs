@@ -24,6 +24,8 @@ namespace ARFastSNTP.Studio;
 public sealed partial class MainWindow : Window
 {
     public ObservableCollection<PeerRowModel> Rows { get; } = new();
+    private readonly Grid _mainLayout;
+    private readonly Grid _historyPanel;
     private readonly TextBlock _pcClock;
     private readonly TextBlock _pcDate;
     private readonly TextBlock _syncState;
@@ -64,6 +66,8 @@ public sealed partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         DataContext = this;
+        _mainLayout = Require<Grid>("MainLayout");
+        _historyPanel = Require<Grid>("HistoryPanel");
         _pcClock = Require<TextBlock>("PcClock");
         _pcDate = Require<TextBlock>("PcDate");
         _syncState = Require<TextBlock>("SyncState");
@@ -75,6 +79,7 @@ public sealed partial class MainWindow : Window
         _historyScroll = Require<ScrollViewer>("HistoryScroll");
         _chevron = Require<Avalonia.Controls.Shapes.Path>("HistoryChevron");
         _add = Require<Button>("AddServerButton");
+        ApplyWindowLayout();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += OnTick;
         _timer.Start();
@@ -184,6 +189,7 @@ public sealed partial class MainWindow : Window
             row.SetEnabled(entry.Enabled);
         }
         Set(_serverCount, Rows.Count == 1 ? "1 server" : Rows.Count + " servers");
+        ApplyWindowLayout();
         RefreshButtons();
     }
 
@@ -485,5 +491,40 @@ public sealed partial class MainWindow : Window
         _historyOpen = !_historyOpen;
         _historyScroll.IsVisible = _historyOpen;
         _chevron.Data = Geometry.Parse(_historyOpen ? ChevronUp : ChevronDown);
+        ApplyWindowLayout();
+    }
+
+    /// <summary>
+    /// In collapsed mode, window height fits visible server rows and is
+    /// non-shrinkable vertically; horizontal resize still works. Expanded
+    /// mode allocates spare height to history using a star Grid row.
+    /// Each viewport scrolls independently and table controls never clip.
+    /// All measurements use Avalonia device-independent pixels.
+    /// </summary>
+    private void ApplyWindowLayout()
+    {
+        // Compact chrome + table headers + hint allowance.
+        // Rows are 44 DIP plus 2 DIP inter-row space; after seven, scroll.
+        double closedHeight = 242 + Math.Clamp(Rows.Count, 1, 7) * 46;
+        const double maxExpandedHeight = 830;
+        if (_historyOpen)
+        {
+            _mainLayout.RowDefinitions = new RowDefinitions("32,Auto,*");
+            _historyPanel.RowDefinitions = new RowDefinitions("32,*");
+            double minimum = Math.Min(maxExpandedHeight, closedHeight + 92);
+            double desired = Math.Min(maxExpandedHeight, closedHeight + 216);
+            MaxHeight = maxExpandedHeight;
+            MinHeight = minimum;
+            if (Height < desired) Height = desired;
+        }
+        else
+        {
+            _mainLayout.RowDefinitions = new RowDefinitions("32,*,Auto");
+            _historyPanel.RowDefinitions = new RowDefinitions("32,Auto");
+            MaxHeight = double.PositiveInfinity;
+            MinHeight = closedHeight;
+            Height = closedHeight;
+            MaxHeight = closedHeight;
+        }
     }
 }

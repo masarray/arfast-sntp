@@ -30,7 +30,14 @@
   <Style Selector="Border.ntp-row">
     <Setter Property="Background" Value="Transparent" />
   </Style>
+  <!-- Very subtle alternate-row tint: no heavy grid lines. -->
+  <Style Selector="Border.ntp-row.zebra">
+    <Setter Property="Background" Value="#05FFFFFF" />
+  </Style>
   <Style Selector="Border.ntp-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ArBrush.Surface2}" />
+  </Style>
+  <Style Selector="Border.ntp-row.zebra:pointerover">
     <Setter Property="Background" Value="{DynamicResource ArBrush.Surface2}" />
   </Style>
   <Style Selector="TextBlock.muted">

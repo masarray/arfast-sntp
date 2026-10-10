@@ -22,7 +22,8 @@ public sealed class PeerRowModel : INotifyPropertyChanged
     private string _stratum = "—";
     private string _offset = "—";
     private string _serverTime = "—";
-    private string _broadcast = "—";
+    private string _rtt = "—";
+    private bool _isZebra;
     private IBrush _iconBrush;
     private IBrush _trackBrush;
     private IBrush _thumbBrush;
@@ -39,6 +40,7 @@ public sealed class PeerRowModel : INotifyPropertyChanged
     {
         Address = address;
         _number = number.ToString("00", CultureInfo.InvariantCulture);
+        _isZebra = number % 2 == 0;
         _green = green; _gray = gray; _trackOff = trackOff;
         _thumb = thumb; _warning = warning;
         _iconBrush = gray; _trackBrush = trackOff;
@@ -53,7 +55,8 @@ public sealed class PeerRowModel : INotifyPropertyChanged
     public string Stratum { get => _stratum; private set => Set(ref _stratum, value); }
     public string Offset { get => _offset; private set => Set(ref _offset, value); }
     public string ServerTime { get => _serverTime; private set => Set(ref _serverTime, value); }
-    public string Broadcast { get => _broadcast; private set => Set(ref _broadcast, value); }
+    public string Rtt { get => _rtt; private set => Set(ref _rtt, value); }
+    public bool IsZebra { get => _isZebra; private set => Set(ref _isZebra, value); }
     public IBrush IconBrush { get => _iconBrush; private set => Set(ref _iconBrush, value); }
     public IBrush TrackBrush { get => _trackBrush; private set => Set(ref _trackBrush, value); }
     public IBrush ThumbBrush { get => _thumbBrush; private set => Set(ref _thumbBrush, value); }
@@ -73,13 +76,16 @@ public sealed class PeerRowModel : INotifyPropertyChanged
         if (!enabled)
         {
             State = "Off"; StatusBrush = _gray; Stratum = "—"; Offset = "—";
-            ServerTime = "—"; LastError = null; _utcBase = null;
+            ServerTime = "—"; Rtt = "—"; LastError = null; _utcBase = null;
         }
     }
 
     internal void SetCanChange(bool enabled) => CanChange = enabled;
-    internal void SetIndex(int index) =>
+    internal void SetIndex(int index)
+    {
         Number = index.ToString("00", CultureInfo.InvariantCulture);
+        IsZebra = index % 2 == 0;
+    }
 
     internal void Apply(DashboardPeer data)
     {
@@ -96,6 +102,8 @@ public sealed class PeerRowModel : INotifyPropertyChanged
             ? b.ToString(CultureInfo.InvariantCulture) : "—";
         Offset = valid && data.OffsetMilliseconds is double ms
             ? StudioStatusPresenter.FormatOffset(ms) : "—";
+        Rtt = valid && data.RttMilliseconds is double rtt && double.IsFinite(rtt) && rtt >= 0
+            ? rtt.ToString("0.00", CultureInfo.InvariantCulture) + " ms" : "—";
         LastError = data.Error;
         if (valid && data.EstimatedServerUtc is DateTimeOffset utc)
         {

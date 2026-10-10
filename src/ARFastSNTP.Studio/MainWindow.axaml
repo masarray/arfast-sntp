@@ -2,22 +2,25 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
         Title="AR Fast SNTP"
-        Width="925" MinWidth="855" MinHeight="225" MaxHeight="740"
-        SizeToContent="Height"
+        Width="925" Height="510" MinWidth="855" MinHeight="275" MaxHeight="830"
+        SizeToContent="Manual"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
-  <Grid Margin="16,9,16,12" RowDefinitions="32,Auto,Auto" RowSpacing="9">
+  <Grid x:Name="MainLayout" Margin="16,9,16,12"
+        RowDefinitions="32,*,Auto" RowSpacing="9">
 
     <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
     <Grid Grid.Row="0" ColumnDefinitions="Auto,18,*,Auto" VerticalAlignment="Center">
-      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+      <!-- Fixed clock/date columns isolate sync status from changing digit glyph widths. -->
+      <Grid ColumnDefinitions="17,86,100" ColumnSpacing="8" VerticalAlignment="Center">
         <TextBlock Classes="micro" Text="PC" VerticalAlignment="Center"/>
-        <TextBlock x:Name="PcClock" FontWeight="SemiBold" FontSize="16"
-                   Text="--:--:--" VerticalAlignment="Center"/>
-        <TextBlock x:Name="PcDate" Classes="micro" Text="—"
+        <TextBlock x:Name="PcClock" Grid.Column="1" FontFamily="Consolas"
+                   FontWeight="SemiBold" FontSize="16" Text="--:--:--"
                    VerticalAlignment="Center"/>
-      </StackPanel>
+        <TextBlock x:Name="PcDate" Grid.Column="2" Classes="micro"
+                   Text="—" VerticalAlignment="Center"/>
+      </Grid>
       <Border Grid.Column="1" Width="1" Background="{DynamicResource ArBrush.Stroke}"
               Height="19" HorizontalAlignment="Center"/>
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
@@ -41,7 +44,7 @@
     <!-- Server grid is the information center. No unused blank rows. -->
     <Border Grid.Row="1" CornerRadius="9" Padding="13,11,13,10"
             Background="{DynamicResource ArBrush.Surface1}">
-      <Grid RowDefinitions="32,32,Auto,Auto" RowSpacing="3">
+      <Grid RowDefinitions="32,32,*,Auto" RowSpacing="3">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
           <TextBlock Text="NTP Servers" FontSize="15" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
@@ -61,25 +64,30 @@
         </Grid>
         <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface2}"
                 CornerRadius="6" Padding="8,0">
-          <Grid ColumnDefinitions="29,48,*,104,66,106,116,80,30" ColumnSpacing="5">
+          <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
             <TextBlock Text="#" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="Use" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="2" Text="NTP Server IP" Classes="table-heading" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="3" Text="Status" Classes="table-heading" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="4" Text="Stratum" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="5" Text="Offset" Classes="table-heading" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="6" Text="Server Time" Classes="table-heading" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="7" Text="Broadcast" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="6" Text="Server Time" Classes="table-heading"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="7" Text="RTT" Classes="table-heading"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                       ToolTip.Tip="RTT (Round-Trip Time): time for an NTP request to reach the server and its reply to return. Lower usually means less network delay, not necessarily better clock accuracy."/>
           </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="2" MaxHeight="332" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="2" MinHeight="44" MaxHeight="332"
+                      VerticalScrollBarVisibility="Auto">
           <ItemsControl ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Classes="ntp-row" Height="44" Margin="0,1" Padding="8,0"
+                <Border Classes="ntp-row" Classes.zebra="{Binding IsZebra}"
+                        Height="44" Margin="0,1" Padding="8,0"
                         CornerRadius="6">
-                  <Grid ColumnDefinitions="29,48,*,104,66,106,116,80,30" ColumnSpacing="5">
+                  <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
                   <TextBlock Text="{Binding Number}" Classes="table-value"
                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                   <Button Grid.Column="1" Width="40" Height="32" Padding="0" HorizontalAlignment="Center"
@@ -114,10 +122,10 @@
                   <TextBlock Grid.Column="5" Text="{Binding Offset}" Classes="table-value"
                              HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                   <TextBlock Grid.Column="6" Text="{Binding ServerTime}" Classes="table-value"
-                             VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="7" Text="{Binding Broadcast}" Classes="table-value"
-                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                             ToolTip.Tip="Broadcast packet monitoring is not yet supported."/>
+                             HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="7" Text="{Binding Rtt}" Classes="table-value"
+                             HorizontalAlignment="Right" VerticalAlignment="Center"
+                             ToolTip.Tip="RTT = Round-Trip Time: network response delay from sending an NTP request to receiving the reply. Lower is generally better; RTT does not measure clock accuracy."/>
                   <Button Grid.Column="8" Height="30" Width="30" Padding="5"
                           HorizontalAlignment="Center" Background="Transparent" BorderThickness="0"
                           IsEnabled="{Binding CanChange}" Click="PeerDelete_OnClick"
@@ -140,8 +148,8 @@
       </Grid>
     </Border>
 
-    <StackPanel Grid.Row="2" Spacing="6">
-      <Grid ColumnDefinitions="*,34" ColumnSpacing="4">
+    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto" RowSpacing="6" MinHeight="32">
+      <Grid Grid.Row="0" ColumnDefinitions="*,34" ColumnSpacing="4">
       <Button Grid.Column="0" Classes="ar" Background="Transparent" BorderThickness="0"
               Padding="3,6" HorizontalContentAlignment="Stretch"
               Click="History_OnClick" ToolTip.Tip="Show or hide recent events">
@@ -168,10 +176,10 @@
         </Viewbox>
       </Button>
       </Grid>
-      <ScrollViewer x:Name="HistoryScroll" IsVisible="False" MaxHeight="212"
+      <ScrollViewer x:Name="HistoryScroll" Grid.Row="1" IsVisible="False"
                     VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="HistoryEvents" Margin="12,2,8,8" Spacing="7"/>
       </ScrollViewer>
-    </StackPanel>
+    </Grid>
   </Grid>
 </Window>
