@@ -2,7 +2,7 @@
 
 **First public testing preview · Windows x64 · unsigned Inno installer**
 
-This release packages the **Windows CI #49 SUCCESS** executable from Git commit \`ef23e4efa0905334c0a7f58c1b03a6573802ce3f\`, validated in the original project before it was renamed to \`masarray/arfast-sntp\`.
+This release packages the **Windows CI #49 SUCCESS** executable from Git commit `ef23e4efa0905334c0a7f58c1b03a6573802ce3f`, validated in the original project before it was renamed to `masarray/arfast-sntp`.
 
 ## Included
 - A compact, branded Avalonia Windows Studio and one permanent Windows Service.
@@ -12,17 +12,17 @@ This release packages the **Windows CI #49 SUCCESS** executable from Git commit 
 - Inno Setup x64 installer and diagnostic export.
 
 ## Download and verify
-Download \`ARFastSNTP-Setup-Windows-x64.exe\` and \`ARFastSNTP-Setup-Windows-x64.exe.sha256\` from this release's **Assets**. In PowerShell, run:
+Download `ARFastSNTP-Setup-Windows-x64.exe` and `ARFastSNTP-Setup-Windows-x64.exe.sha256` from this release's **Assets**. In PowerShell, run:
 
-\`\`\`powershell
+```powershell
 Get-FileHash .\ARFastSNTP-Setup-Windows-x64.exe -Algorithm SHA256
-\`\`\`
+```
 
-Compare the reported hexadecimal SHA-256 digest to the \`.sha256\` file. This is a **code-unsigned** preview; verification of the publisher identity is not available.
+Compare the reported hexadecimal SHA-256 digest to the `.sha256` file. This is a **code-unsigned** preview; verification of the publisher identity is not available.
 
 ## Important safety information
 
-**For trusted isolated lab/test PCs only. Not for production SCADA, SOE, historian or any critical system.** The default installer activates clock correction when it has an eligible reference. To test monitor-only operation, run the installer with \`/LABSYNC=0\`. Administrator approval is required at install time.
+**For trusted isolated lab/test PCs only. Not for production SCADA, SOE, historian or any critical system.** The default installer activates clock correction when it has an eligible reference. To test monitor-only operation, run the installer with `/LABSYNC=0`. Administrator approval is required at install time.
 
 Reported real tests accepted two public Cloudflare NTP IPv4 replies and a small clock correction. They do **not** establish GPS-grade precision, independent sources, robust recovery from a very large time jump, or production acceptance.
 
