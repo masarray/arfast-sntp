@@ -56,6 +56,7 @@ public sealed partial class MainWindow : Window
     private bool _closed;
     private bool _historyOpen;
     private int _ticks;
+    private int _layoutPeerCount = -1;
     private string? _lastJson;
     private string? _lastEvents;
     private string _timezone = "";
@@ -189,7 +190,8 @@ public sealed partial class MainWindow : Window
             row.SetEnabled(entry.Enabled);
         }
         Set(_serverCount, Rows.Count == 1 ? "1 server" : Rows.Count + " servers");
-        ApplyWindowLayout();
+        // Snapshot refresh every 5s must not reset a manually resized history.
+        if (_layoutPeerCount != Rows.Count) ApplyWindowLayout();
         RefreshButtons();
     }
 
@@ -503,6 +505,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ApplyWindowLayout()
     {
+        _layoutPeerCount = Rows.Count;
         // Compact chrome + table headers + hint allowance.
         // Rows are 44 DIP plus 2 DIP inter-row space; after seven, scroll.
         double closedHeight = 242 + Math.Clamp(Rows.Count, 1, 7) * 46;
