@@ -386,6 +386,10 @@ internal sealed class MultiPeerWorker : BackgroundService
 
     private async Task ProbeAsync(string address, long generation, CancellationToken token)
     {
+        // A peer may have waited for one of the four bounded probe slots
+        // while the operator disabled it. Recheck after slot acquisition so
+        // OFF does not initiate a new UDP transaction from the old generation.
+        if (!_catalog.IsCurrent(address, generation)) return;
         var rt = _runtime[address];
         try
         {
