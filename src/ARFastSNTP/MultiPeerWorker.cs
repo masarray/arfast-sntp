@@ -366,9 +366,9 @@ internal sealed class MultiPeerWorker : BackgroundService
             return new NtpDecisionPeer(peer.Address, peer.Enabled, rt.State,
                 rt.Sample?.Offset.TotalMilliseconds, rt.Sample?.RttMs,
                 rt.Sample?.Stratum, ageMs, rt.Streak, rt.Failures,
-                rt.Error is null ? null : rt.Error[..Math.Min(256, rt.Error.Length)]);
+                rt.Error is null ? null : rt.Error[..Math.Min(128, rt.Error.Length)]);
         }).ToArray();
-        if (_diagnostics.Count == 32) _diagnostics.Dequeue();
+        if (_diagnostics.Count == 16) _diagnostics.Dequeue();
         _diagnostics.Enqueue(new NtpDecisionTrace(DateTimeOffset.UtcNow,
             state, selected, reason, stepEvent, samples,
             Interlocked.Read(ref _requests), Interlocked.Read(ref _accepted),

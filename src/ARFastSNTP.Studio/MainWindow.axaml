@@ -164,7 +164,7 @@
           <Path Width="24" Height="24" Stretch="Uniform"
                 Data="M12 3v12m0 0 4-4m-4 4-4-4M4 16v4h16v-4"
                 Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.8"
-                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+                StrokeLineCap="Round"/>
         </Viewbox>
       </Button>
       </Grid>
