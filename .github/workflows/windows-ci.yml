@@ -124,170 +124,29 @@ jobs:
           if ($manifest.name -ne 'AR Fast SNTP' -or @($manifest.icons).Count -lt 2) {
             throw 'Web manifest still contains placeholder branding'
           }
-          # One version across installed Inno app, Windows PE file metadata,
-          # public release notes and browser download endpoints.
+          # Validate one installer version and links to the newest GitHub Release.
           $iss = Get-Content 'installer/ARFastSNTP.iss' -Raw
           $props = Get-Content 'Directory.Build.props' -Raw
-          $matchVersion = [regex]::Match($iss, '(?m)^AppVersion=(\d+\.\d+\.\d+)\s*
-          Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
-          foreach ($path in @(
-            'publish/worker/ARFastSNTP.exe',
-            'publish/studio/ARFastSNTP.Studio.exe',
-            'publish/ARFastSNTP.Setup.exe',
-            'LICENSE',
-            'NOTICE',
-            'docs/DESIGN-TOKEN-PROVENANCE.md'
-          )) {
-            if (-not (Test-Path $path)) { throw "Installer payload missing: $path" }
-          }
-          $xaml = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml' -Raw
-          if ($xaml.Contains('InstallSync_OnClick') -or
-              $xaml.Contains('x:Name="YearInput"') -or
-              $xaml.Contains('Content="+ Add server"')) {
-            throw 'Compact monitor must not expose installer/era/placeholder controls'
-          }
-          if (-not $xaml.Contains('HistoryScroll') -or
-              -not $xaml.Contains('ItemsControl ItemsSource="{Binding Rows}"') -or
-              -not $xaml.Contains('AddServer_OnClick') -or
-              -not $xaml.Contains('PeerToggle_OnClick') -or
-              -not $xaml.Contains('PeerDelete_OnClick') -or
-              -not $xaml.Contains('SizeToContent="Manual"') -or
-              -not $xaml.Contains('x:Name="MainLayout"') -or
-              -not $xaml.Contains('x:Name="HistoryPanel"') -or
-              -not $xaml.Contains('RowDefinitions="32,44,*,Auto"') -or
-              -not $xaml.Contains('MinHeight="380"') -or
-              -not $xaml.Contains('MaxWidth="1440" HorizontalAlignment="Stretch"') -or
-              -not $xaml.Contains('RowDefinitions="32,*,Auto"') -or
-              -not $xaml.Contains('x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto"') -or
-              -not $xaml.Contains('MaxHeight="172" MinHeight="0"') -or
-              $xaml.Contains('MaxHeight="830"')) {
-            throw 'Multi-peer Explorer or auto-sized bounded history layout is missing'
-          }
-          if ($xaml.Contains('x:Name="SourceToggle"') -or
-              $xaml.Contains('Content="+ Add server"')) {
-            throw 'Old single-server UI was accidentally restored'
-          }
-          $columnLayout = 'ColumnDefinitions="29,48,*,104,66,108,116,80,30"'
-          if (-not $xaml.Contains('Classes="ntp-row"') -or
-              -not $xaml.Contains('Height="44" Margin="0"') -or
-              -not $xaml.Contains('Grid.Row="1" Height="44"') -or
-              -not $xaml.Contains('Classes="table-value"') -or
-              $xaml.Split(@($columnLayout), [System.StringSplitOptions]::None).Length -ne 3 -or
-              -not $xaml.Contains('Text="RTT"') -or
-              -not $xaml.Contains('Text="{Binding Rtt}"') -or
-              -not $xaml.Contains('ToolTip.Tip="RTT (Round-Trip Time)') -or
-              -not $xaml.Contains('Classes.zebra="{Binding IsZebra}"')) {
-            throw 'NTP Explorer lost aligned RTT columns, RTT help or subtle zebra rows'
-          }
-          $rowStyle = Get-Content 'src/ARFastSNTP.Studio/Design/SntpControls.axaml' -Raw
-          if (-not $rowStyle.Contains('Border.ntp-row.zebra') -or
-              -not $rowStyle.Contains('Border.ntp-row:pointerover')) {
-            throw 'Zebra rows must retain their subtle background and hover state'
-          }
-          $dialog = Get-Content 'src/ARFastSNTP.Studio/PeerDialogs.cs' -Raw
-          if (-not $dialog.Contains('SizeToContent = SizeToContent.Height') -or
-              $dialog.Contains('Height = 186') -or
-              $dialog.Contains('Height = 157')) {
-            throw 'NTP Add/Delete dialogs reverted to large fixed-height blank areas'
-          }
-          $history = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
-          if (-not $history.Contains('EventDisplay.Format') -or
-              -not $history.Contains('Grid.SetColumn(description, 1)') -or
-              -not $history.Contains('History_OnClick') -or
-              -not $history.Contains('_historyScroll.IsVisible = _historyOpen') -or
-              $history.Contains('ApplyWindowLayout()') -or
-              $history.Contains('RowDefinitions = new RowDefinitions')) {
-            throw 'History must toggle visibility without reallocating grid rows'
-          }
-          # Native resizing must never be driven from a History click or
-          # timer/catalog refresh; Windows controls restored/maximized bounds.
-          $toggle = $history.Substring($history.IndexOf('private void History_OnClick'))
-          if ($toggle -match '\b(?:Height|MinHeight|MaxHeight)\s*=' -or
-              $toggle.Contains('SizeToContent') -or
-              $toggle.Contains('RowDefinitions')) {
-            throw 'History toggle must never mutate bounds or row geometry'
-          }
-          $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
-          if (-not $ntp.Contains('NtpResponseTimeoutException')) {
-            throw 'UDP timeout lost local/remote endpoint diagnostics'
-          }
-          $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
-          if (-not $viewCode.Contains('PeerControlProtocol.SendAsync') -or
-              -not $viewCode.Contains('ReconcileRows') -or
-              -not $viewCode.Contains('Rows.Move(')) {
-            throw 'UI must bind to live canonical peer controls and preserve rows'
-          }
-          if ($viewCode.Contains('Verb = "runas"') -or
-              $viewCode.Contains('Process.Start(')) {
-            throw 'Server add/toggle/delete must never install or relaunch a service'
-          }
-          $worker = Get-Content 'src/ARFastSNTP/MultiPeerWorker.cs' -Raw
-          if (-not $worker.Contains('PeerElection.Choose') -or
-              -not $worker.Contains('PeerCatalog') -or
-              -not $worker.Contains('TryStep(') -or
-              -not $worker.Contains('new SemaphoreSlim(4)')) {
-            throw 'Missing bounded peer polling, source selection, or step barrier'
-          }
-          $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
-          if (-not $wizard.Contains('Enter NTP Server IP Address') -or
-              -not $wizard.Contains('FinishedHeadingLabel') -or
-              -not $wizard.Contains('install-result.txt')) {
-            throw 'Inno completion must distinguish service running from verified sync'
-          }
-          if (Test-Path 'publish/dashboard') {
-            throw 'Old WinForms UI must not be bundled into the canonical installer'
-          }
-          Write-Host 'Installer payload verified; legacy WinForms remains source/build fallback.'
-
-      - name: Compile standalone Inno Setup wizard
-        shell: pwsh
-        run: |
-          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path $compiler)) {
-            choco install innosetup --version=6.4.0 -y --no-progress --limit-output
-            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler installation failed' }
-          }
-          if (-not (Test-Path $compiler)) { throw "ISCC compiler is missing: $compiler" }
-          & $compiler '/Qp' 'installer/ARFastSNTP.iss'
-          if ($LASTEXITCODE -ne 0) { throw "Inno compiler failed ($LASTEXITCODE)" }
-          $installer = 'installer-out/ARFastSNTP-Setup-Windows-x64.exe'
-          if (-not (Test-Path $installer)) { throw 'Installer executable is missing' }
-          $bytes = (Get-Item $installer).Length
-          if ($bytes -lt 1000000) { throw "Suspiciously small installer: $bytes bytes" }
-          Write-Host "Inno Setup compiled: $installer ($bytes bytes)"
-
-      - name: Upload single Windows setup executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: ARFastSNTP-Inno-Windows-x64
-          path: |
-            installer-out/ARFastSNTP-Setup-Windows-x64.exe
-            LICENSE
-            NOTICE
-            docs/START-HERE.txt
-            docs/INSTALLER-UX-ACCEPTANCE.md
-          if-no-files-found: error
-          retention-days: 14
-)
-          if (-not $matchVersion.Success) { throw 'Inno AppVersion must be semantic x.y.z' }
-          $version = $matchVersion.Groups[1].Value
+          $versionMatch = [regex]::Match($iss, '(?m)^AppVersion=(\d+\.\d+\.\d+)\s*$')
+          if (-not $versionMatch.Success) { throw 'Invalid Inno AppVersion' }
+          $version = $versionMatch.Groups[1].Value
           if (-not $props.Contains("<Version>$version</Version>") -or
               -not $props.Contains("<FileVersion>$version.0</FileVersion>")) {
-            throw 'Assembly/file version differs from Inno installer version'
+            throw 'Windows executable version differs from Inno version'
           }
           if (-not (Test-Path "docs/RELEASE-NOTES-$version.md")) {
-            throw 'Release notes must match embedded Inno version'
+            throw 'Release notes must match the Inno version'
           }
-          $latestPath = 'releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe'
+          $latest = 'releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe'
           $readme = Get-Content 'README.md' -Raw
-          $download = Get-Content 'download.html' -Raw
-          if (-not $readme.Contains($latestPath) -or
-              -not $download.Contains($latestPath) -or
-              -not $download.Contains($latestPath + '.sha256') -or
+          $downloadPage = Get-Content 'download.html' -Raw
+          if (-not $readme.Contains($latest) -or
+              -not $downloadPage.Contains($latest) -or
+              -not $downloadPage.Contains($latest + '.sha256') -or
               -not (Test-Path 'release.js')) {
-            throw 'README or download page has lost the permanent latest-release links'
+            throw 'Public site and documentation lost the permanent download link'
           }
-          Write-Host "Inno, assembly, documentation and download links agree on $version."
+          Write-Host "Installer, .NET version, release notes and download links agree on $version."
           Write-Host 'Canonical Windows, Studio, Inno and landing brand assets verified.'
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
           foreach ($path in @(
