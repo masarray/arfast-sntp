@@ -1,0 +1,24 @@
+AR Fast SNTP — Windows x64 installer (multi-server candidate)
+=============================================================
+
+1. Download the newest GREEN ARFastSNTP-Inno-Windows-x64 GitHub Actions artifact.
+2. Extract the ZIP; run ARFastSNTP-Setup-Windows-x64.exe.
+3. Clean install: enter your first NTP Server IP. Existing installs preserve
+   their saved NTP Server list automatically without asking for that IP again.
+4. Setup installs/updates only one canonical Windows Service, starts it,
+   and offers to open AR Fast SNTP Studio.
+5. In Studio use Add to enter another NTP Server IPv4. Each row has a Use
+   switch and a Delete icon. Changes are live; NO reinstall/restart/UAC is
+   required for source changes.
+6. The small PC Time / Sync Status strip is for orientation. Server status,
+   stratum, offset and time are in the main NTP Explorer.
+7. Expand Status History to inspect time corrections or failures.
+
+A green server icon means enabled. Only a validated, elected NTP source
+may correct the PC clock; two conflicting live servers freeze correction.
+Broadcast = not measured until a dedicated listener is implemented.
+
+Safety: isolated authorized Windows lab PC ONLY; not a live SCADA/SOE host.
+This candidate still requires real GPS/NTP failover acceptance testing.
+Installer logs: C:\ProgramData\ARFastSNTP\setup.log
+Architecture: docs/MULTI-NTP-ARCHITECTURE.md (repository).

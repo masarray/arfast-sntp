@@ -1,0 +1,14 @@
+AR Fast SNTP COPYRIGHT AND LICENSE NOTICE
+=====================================
+
+SPDX-License-Identifier: GPL-2.0-or-later
+
+AR Fast SNTP is licensed under the GNU General Public License, version
+2 or (at your option) any later version. Full license: LICENSE.
+
+Avalonia design dictionaries reused from masarray/arssyut commit
+b9bfa882e784560051e8753e691d6662909dd5ad are GPL-2.0-or-later.
+Provenance: docs/DESIGN-TOKEN-PROVENANCE.md.
+
+Avalonia uses MIT-licensed components. Inter is embedded via the
+official Avalonia.Fonts.Inter package under SIL OFL 1.1.

@@ -1,0 +1,199 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ARFastSNTP.Studio.MainWindow"
+        Title="AR Fast SNTP"
+        Icon="avares://ARFastSNTP.Studio/Assets/brand.ico"
+        Width="925" Height="570" MinWidth="855" MinHeight="380"
+        SizeToContent="Manual"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ArBrush.Canvas}"
+        FontFamily="{DynamicResource ArFont.Inter}">
+  <Grid x:Name="MainLayout" Margin="16,9,16,12"
+        MaxWidth="1440" HorizontalAlignment="Stretch"
+        RowDefinitions="32,*,Auto" RowSpacing="9" ClipToBounds="True">
+
+    <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,18,*,Auto" VerticalAlignment="Center">
+      <!-- Fixed clock/date columns isolate sync status from changing digit glyph widths. -->
+      <Grid ColumnDefinitions="17,86,100" ColumnSpacing="8" VerticalAlignment="Center">
+        <TextBlock Classes="micro" Text="PC" VerticalAlignment="Center"/>
+        <TextBlock x:Name="PcClock" Grid.Column="1" FontFamily="Consolas"
+                   FontWeight="SemiBold" FontSize="16" Text="--:--:--"
+                   VerticalAlignment="Center"/>
+        <TextBlock x:Name="PcDate" Grid.Column="2" Classes="micro"
+                   Text="—" VerticalAlignment="Center"/>
+      </Grid>
+      <Border Grid.Column="1" Width="1" Background="{DynamicResource ArBrush.Stroke}"
+              Height="19" HorizontalAlignment="Center"/>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                  VerticalAlignment="Center">
+        <TextBlock Text="●" x:Name="SyncLamp" FontSize="13"
+                   Foreground="{DynamicResource ArBrush.TextDim}"/>
+        <TextBlock x:Name="SyncState" FontSize="14" FontWeight="SemiBold" Text="Checking"/>
+      </StackPanel>
+      <Button Grid.Column="3" Classes="ar" Width="33" Height="30"
+              Background="Transparent" BorderThickness="0" Padding="5"
+              Click="Refresh_OnClick" ToolTip.Tip="Refresh status">
+        <Viewbox Width="18" Height="18">
+          <Path Width="24" Height="24" Stretch="Uniform"
+                Data="M20 11a8 8 0 0 0-14.5-5.5L3 8 M3 3v5h5 M4 13a8 8 0 0 0 14.5 5.5L21 16 M21 21v-5h-5"
+                Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.8"
+                StrokeLineCap="Round"/>
+        </Viewbox>
+      </Button>
+    </Grid>
+
+    <!-- Server grid is the information center. No unused blank rows. -->
+    <Border Grid.Row="1" CornerRadius="9" Padding="13,10,13,10"
+            Background="{DynamicResource ArBrush.Surface1}" ClipToBounds="True">
+      <!-- Only the row viewport stretches. Header and data rows share 44 DIP. -->
+      <Grid RowDefinitions="32,44,*,Auto" RowSpacing="0" ClipToBounds="True">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
+          <!-- Small branded mark, secondary to the actual server information. -->
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Image Source="avares://ARFastSNTP.Studio/Assets/brand.png"
+                   Width="17" Height="17" Stretch="Uniform"
+                   VerticalAlignment="Center"/>
+            <TextBlock Text="NTP Servers" FontSize="15" FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock x:Name="ListCount" Grid.Column="1" Classes="micro"
+                     Text="1 server" VerticalAlignment="Center"/>
+          <Button x:Name="AddServerButton" Grid.Column="2"
+                  Classes="ar" Width="77" Height="30" Padding="7,3"
+                  Click="AddServer_OnClick" ToolTip.Tip="Add NTP Server IP">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <Viewbox Width="17" Height="17">
+                <Path Width="960" Height="960" Stretch="Uniform"
+                      Data="M299.5-148Q234-176 185-225t-77-114.5Q80-405 80-480t28-140.5Q136-686 185-735t114.5-77Q365-840 440-840q21 0 40.5 2.5T520-830v82q-20-6-39.5-9t-40.5-3q-118 0-199 81t-81 199q0 118 81 199t199 81q118 0 199-81t81-199q0-11-1-20t-3-20h82q2 11 2 20v20q0 75-28 140.5T695-225q-49 49-114.5 77T440-120q-75 0-140.5-28ZM552-312 400-464v-216h80v184l128 128-56 56Zm168-288v-120H600v-80h120v-120h80v120h120v80H800v120h-80Z" Fill="{DynamicResource ArBrush.Success}"/>
+              </Viewbox>
+              <TextBlock Text="Add" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+        <Border Grid.Row="1" Height="44"
+                Background="{DynamicResource ArBrush.Surface2}"
+                CornerRadius="6" Padding="8,0">
+          <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
+            <TextBlock Text="#" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Use" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="2" Text="NTP Server IP" Classes="table-heading" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="3" Text="Status" Classes="table-heading" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="4" Text="Stratum" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="5" Text="Offset" Classes="table-heading" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="6" Text="Server Time" Classes="table-heading"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="7" Text="RTT" Classes="table-heading"
+                       HorizontalAlignment="Right" VerticalAlignment="Center"
+                       ToolTip.Tip="RTT (Round-Trip Time): time for an NTP request to reach the server and its reply to return. Lower usually means less network delay, not necessarily better clock accuracy."/>
+          </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" MinHeight="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto" ClipToBounds="True">
+          <ItemsControl ItemsSource="{Binding Rows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="ntp-row" Classes.zebra="{Binding IsZebra}"
+                        Height="44" Margin="0" Padding="8,0"
+                        CornerRadius="6">
+                  <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
+                  <TextBlock Text="{Binding Number}" Classes="table-value"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Width="40" Height="32" Padding="0" HorizontalAlignment="Center"
+                          Background="Transparent" BorderThickness="0"
+                          IsEnabled="{Binding CanChange}"
+                          ToolTip.Tip="Enable or disable this NTP server"
+                          Click="PeerToggle_OnClick">
+                    <Border Width="34" Height="19" CornerRadius="10"
+                            Background="{Binding TrackBrush}">
+                      <Grid Margin="3,0">
+                        <Ellipse Width="13" Height="13" VerticalAlignment="Center"
+                                 HorizontalAlignment="{Binding ThumbAlignment}"
+                                 Fill="{Binding ThumbBrush}"/>
+                      </Grid>
+                    </Border>
+                  </Button>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                              VerticalAlignment="Center">
+                    <Viewbox Width="17" Height="17">
+                      <Path Width="960" Height="960" Stretch="Uniform"
+                            Data="M636-848.5Q709-817 763-763t85.5 127Q880-563 880-480v11q-19-13-39-23t-42-17q-8-89-61-161.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h257q-62 37-99.5 100.5T440-240q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 125 83 216.5T451-161q7 23 17 42.5T491-80h-11q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5Zm-57.5 750Q520-157 520-240t58.5-141.5Q637-440 720-440t141.5 58.5Q920-323 920-240T861.5-98.5Q803-40 720-40T578.5-98.5ZM786-146l28-28-74-74v-112h-40v128l86 86Z" Fill="{Binding IconBrush}"/>
+                    </Viewbox>
+                    <TextBlock Text="{Binding Address}" Classes="table-value"
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="3" Text="{Binding State}" Classes="table-value"
+                             Foreground="{Binding StatusBrush}"
+                             VerticalAlignment="Center" ToolTip.Tip="{Binding LastError}"
+                             TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Grid.Column="4" Text="{Binding Stratum}" Classes="table-value"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="5" Text="{Binding Offset}" Classes="table-value"
+                             HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="6" Text="{Binding ServerTime}" Classes="table-value"
+                             HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="7" Text="{Binding Rtt}" Classes="table-value"
+                             HorizontalAlignment="Right" VerticalAlignment="Center"
+                             ToolTip.Tip="RTT = Round-Trip Time: network response delay from sending an NTP request to receiving the reply. Lower is generally better; RTT does not measure clock accuracy."/>
+                  <Button Grid.Column="8" Height="30" Width="30" Padding="5"
+                          HorizontalAlignment="Center" Background="Transparent" BorderThickness="0"
+                          IsEnabled="{Binding CanChange}" Click="PeerDelete_OnClick"
+                          ToolTip.Tip="Remove NTP server">
+                    <Viewbox Width="17" Height="17">
+                      <Path Width="960" Height="960" Stretch="Uniform"
+                            Data="M280-720v520-520Zm170 600H280q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v172q-17-5-39.5-8.5T680-560v-160H280v520h132q6 21 16 41.5t22 38.5Zm-90-160h40q0-63 20-103.5l20-40.5v-216h-80v360Zm160-230q17-11 38.5-22t41.5-16v-92h-80v130Zm18.5 371.5Q480-197 480-280t58.5-141.5Q597-480 680-480t141.5 58.5Q880-363 880-280t-58.5 141.5Q763-80 680-80t-141.5-58.5ZM746-186l28-28-74-74v-112h-40v128l86 86Z" Fill="{DynamicResource ArBrush.TextDim}"/>
+                    </Viewbox>
+                  </Button>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock x:Name="ConnectionHint" Grid.Row="3" Margin="8,4,8,0"
+                   Text="Checking servers..." Classes="muted"
+                   IsVisible="False" TextTrimming="CharacterEllipsis"/>
+      </Grid>
+    </Border>
+
+    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto" RowSpacing="0"
+          ClipToBounds="True">
+      <Grid Grid.Row="0" ColumnDefinitions="*,34" ColumnSpacing="4">
+      <Button Grid.Column="0" Classes="ar" Background="Transparent" BorderThickness="0"
+              Padding="3,6" HorizontalContentAlignment="Stretch"
+              Click="History_OnClick" ToolTip.Tip="Show or hide recent events">
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+          <Viewbox Width="20" Height="20">
+            <Path x:Name="HistoryChevron" Width="960" Height="960" Stretch="Uniform"
+                  Data="m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" Fill="{DynamicResource ArBrush.TextSecondary}"/>
+          </Viewbox>
+          <TextBlock Grid.Column="1" Text="Status History"
+                     VerticalAlignment="Center" FontWeight="SemiBold"/>
+          <TextBlock x:Name="EventCount" Grid.Column="2" Text="0 events"
+                     Classes="micro" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+      <Button Grid.Column="1" Classes="ar" Width="30" Height="30"
+              Padding="6" Background="Transparent" BorderThickness="0"
+              Click="ExportDiagnostics_OnClick"
+              ToolTip.Tip="Export NTP diagnostics as JSON">
+        <Viewbox Width="17" Height="17">
+          <Path Width="24" Height="24" Stretch="Uniform"
+                Data="M12 3v12m0 0 4-4m-4 4-4-4M4 16v4h16v-4"
+                Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.8"
+                StrokeLineCap="Round"/>
+        </Viewbox>
+      </Button>
+      </Grid>
+      <ScrollViewer x:Name="HistoryScroll" Grid.Row="1" IsVisible="False"
+                    MaxHeight="172" MinHeight="0"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto" ClipToBounds="True">
+        <StackPanel x:Name="HistoryEvents" Margin="12,2,8,8" Spacing="7"/>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Window>

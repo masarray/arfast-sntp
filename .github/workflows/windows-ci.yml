@@ -1,0 +1,266 @@
+name: Windows CI
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'tests/**', 'installer/**', 'tools/**', 'LICENSE', 'NOTICE', '.github/workflows/windows-ci.yml']
+  pull_request:
+    paths: ['src/**', 'tests/**', 'installer/**', 'tools/**', 'LICENSE', 'NOTICE', '.github/workflows/windows-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build worker, regression harness, GUI and setup
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj',
+            'src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj',
+            'src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj',
+            'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj'
+          )
+          foreach ($project in $projects) {
+            dotnet build $project -c Release --warnaserror
+            if ($LASTEXITCODE -ne 0) {
+              throw "Fail-fast: build failed for $project (exit $LASTEXITCODE)"
+            }
+          }
+      - name: SNTP regression and offline setup argument tests
+        shell: pwsh
+        run: |
+          dotnet run --project tests/ARFastSNTP.Tests/ARFastSNTP.Tests.csproj -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { throw 'SNTP regression test failed' }
+          dotnet run --project src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --no-build -- --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Graphical setup argument test failed' }
+          dotnet run --project src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release --no-build -- --inno-self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Inno service lifecycle self-test failed' }
+      - name: Worker no-network preflight and lifecycle smoke test
+        shell: pwsh
+        run: |
+          dotnet run --project src/ARFastSNTP/ARFastSNTP.csproj -c Release --no-build -- --server 192.16.1.175 --server-year 2026 --certification-mode --allow-step --check-config
+          if ($LASTEXITCODE -ne 0) { throw 'Worker configuration check failed' }
+          $worker = Join-Path $PWD 'src/ARFastSNTP/bin/Release/net8.0/ARFastSNTP.exe'
+          $statusFile = Join-Path $env:TEMP ("arfast-sntp-smoke-" + [guid]::NewGuid().ToString('N') + '.json')
+          $process = Start-Process -FilePath $worker -ArgumentList @(
+            '--server','127.0.0.1','--server-year','2026',
+            '--status-file', $statusFile) -PassThru -WindowStyle Hidden
+          try {
+            $created = $false
+            for ($i = 0; $i -lt 25; $i++) {
+              Start-Sleep -Milliseconds 400
+              if (Test-Path -LiteralPath $statusFile) { $created = $true; break }
+              if ($process.HasExited) { throw "Worker exited unexpectedly: $($process.ExitCode)" }
+            }
+            if (-not $created) { throw 'Worker did not produce status in 10 seconds' }
+            $status = Get-Content -LiteralPath $statusFile -Raw | ConvertFrom-Json
+            if ($status.StepEnabled) { throw 'Monitor worker unexpectedly has clock stepping enabled' }
+            if ($status.Server -ne '127.0.0.1') { throw 'Wrong status server' }
+            if ($status.RequestCount -lt 1) { throw 'Worker issued no SNTP requests' }
+            if (@($status.Peers).Count -ne 1) { throw 'Per-peer worker status missing' }
+            if ($status.Peers[0].Address -ne '127.0.0.1') { throw 'Wrong source in canonical list' }
+            if ($process.HasExited) { throw 'Worker unexpectedly stopped' }
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+            $process.Dispose()
+            Remove-Item -LiteralPath $statusFile -ErrorAction SilentlyContinue
+          }
+      - name: Publish standalone Windows executables
+        run: |
+          dotnet publish src/ARFastSNTP/ARFastSNTP.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/worker
+          dotnet publish src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o setup-build
+          dotnet publish src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish/studio
+      - name: Validate lean Windows installer payload
+        shell: pwsh
+        run: |
+          # Single canonical branding pack. These fail-fast checks protect
+          # the executable, Inno installer and browser/README identities.
+          $iconPath = 'assets/favicon/favicon.ico'
+          $ico = [System.IO.File]::ReadAllBytes((Resolve-Path $iconPath).Path)
+          if ($ico.Length -lt 1000 -or $ico[0] -ne 0 -or $ico[1] -ne 0 -or
+              $ico[2] -ne 1 -or $ico[3] -ne 0) {
+            throw 'Missing or invalid multi-resolution Windows ICO'
+          }
+          foreach ($project in @(
+            'src/ARFastSNTP/ARFastSNTP.csproj',
+            'src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj',
+            'src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj',
+            'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj'
+          )) {
+            if (-not (Get-Content $project -Raw).Contains(
+                '<ApplicationIcon>../../assets/favicon/favicon.ico</ApplicationIcon>')) {
+              throw "Executable lost its canonical brand icon: $project"
+            }
+          }
+          $studioProj = Get-Content 'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj' -Raw
+          if (-not $studioProj.Contains('Assets/brand.ico') -or
+              -not $studioProj.Contains('Assets/brand.png')) {
+            throw 'Studio lacks embedded brand images'
+          }
+          $window = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml' -Raw
+          if (-not $window.Contains('Icon="avares://ARFastSNTP.Studio/Assets/brand.ico"') -or
+              -not $window.Contains('Assets/brand.png')) {
+            throw 'Studio window and brand mark missing'
+          }
+          $inno = Get-Content 'installer/ARFastSNTP.iss' -Raw
+          if (-not $inno.Contains('SetupIconFile=..\assets\favicon\favicon.ico')) {
+            throw 'Inno installer lost the shared icon'
+          }
+          $landing = Get-Content 'index.html' -Raw
+          if (-not $landing.Contains('assets/favicon/favicon.ico') -or
+              -not $landing.Contains('assets/favicon/site.webmanifest')) {
+            throw 'Landing page favicon or manifest is missing'
+          }
+          $manifest = Get-Content 'assets/favicon/site.webmanifest' -Raw | ConvertFrom-Json
+          if ($manifest.name -ne 'AR Fast SNTP' -or @($manifest.icons).Count -lt 2) {
+            throw 'Web manifest still contains placeholder branding'
+          }
+          Write-Host 'Canonical Windows, Studio, Inno and landing brand assets verified.'
+          Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
+          foreach ($path in @(
+            'publish/worker/ARFastSNTP.exe',
+            'publish/studio/ARFastSNTP.Studio.exe',
+            'publish/ARFastSNTP.Setup.exe',
+            'LICENSE',
+            'NOTICE',
+            'docs/DESIGN-TOKEN-PROVENANCE.md'
+          )) {
+            if (-not (Test-Path $path)) { throw "Installer payload missing: $path" }
+          }
+          $xaml = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml' -Raw
+          if ($xaml.Contains('InstallSync_OnClick') -or
+              $xaml.Contains('x:Name="YearInput"') -or
+              $xaml.Contains('Content="+ Add server"')) {
+            throw 'Compact monitor must not expose installer/era/placeholder controls'
+          }
+          if (-not $xaml.Contains('HistoryScroll') -or
+              -not $xaml.Contains('ItemsControl ItemsSource="{Binding Rows}"') -or
+              -not $xaml.Contains('AddServer_OnClick') -or
+              -not $xaml.Contains('PeerToggle_OnClick') -or
+              -not $xaml.Contains('PeerDelete_OnClick') -or
+              -not $xaml.Contains('SizeToContent="Manual"') -or
+              -not $xaml.Contains('x:Name="MainLayout"') -or
+              -not $xaml.Contains('x:Name="HistoryPanel"') -or
+              -not $xaml.Contains('RowDefinitions="32,44,*,Auto"') -or
+              -not $xaml.Contains('MinHeight="380"') -or
+              -not $xaml.Contains('MaxWidth="1440" HorizontalAlignment="Stretch"') -or
+              -not $xaml.Contains('RowDefinitions="32,*,Auto"') -or
+              -not $xaml.Contains('x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto"') -or
+              -not $xaml.Contains('MaxHeight="172" MinHeight="0"') -or
+              $xaml.Contains('MaxHeight="830"')) {
+            throw 'Multi-peer Explorer or auto-sized bounded history layout is missing'
+          }
+          if ($xaml.Contains('x:Name="SourceToggle"') -or
+              $xaml.Contains('Content="+ Add server"')) {
+            throw 'Old single-server UI was accidentally restored'
+          }
+          $columnLayout = 'ColumnDefinitions="29,48,*,104,66,108,116,80,30"'
+          if (-not $xaml.Contains('Classes="ntp-row"') -or
+              -not $xaml.Contains('Height="44" Margin="0"') -or
+              -not $xaml.Contains('Grid.Row="1" Height="44"') -or
+              -not $xaml.Contains('Classes="table-value"') -or
+              $xaml.Split(@($columnLayout), [System.StringSplitOptions]::None).Length -ne 3 -or
+              -not $xaml.Contains('Text="RTT"') -or
+              -not $xaml.Contains('Text="{Binding Rtt}"') -or
+              -not $xaml.Contains('ToolTip.Tip="RTT (Round-Trip Time)') -or
+              -not $xaml.Contains('Classes.zebra="{Binding IsZebra}"')) {
+            throw 'NTP Explorer lost aligned RTT columns, RTT help or subtle zebra rows'
+          }
+          $rowStyle = Get-Content 'src/ARFastSNTP.Studio/Design/SntpControls.axaml' -Raw
+          if (-not $rowStyle.Contains('Border.ntp-row.zebra') -or
+              -not $rowStyle.Contains('Border.ntp-row:pointerover')) {
+            throw 'Zebra rows must retain their subtle background and hover state'
+          }
+          $dialog = Get-Content 'src/ARFastSNTP.Studio/PeerDialogs.cs' -Raw
+          if (-not $dialog.Contains('SizeToContent = SizeToContent.Height') -or
+              $dialog.Contains('Height = 186') -or
+              $dialog.Contains('Height = 157')) {
+            throw 'NTP Add/Delete dialogs reverted to large fixed-height blank areas'
+          }
+          $history = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
+          if (-not $history.Contains('EventDisplay.Format') -or
+              -not $history.Contains('Grid.SetColumn(description, 1)') -or
+              -not $history.Contains('History_OnClick') -or
+              -not $history.Contains('_historyScroll.IsVisible = _historyOpen') -or
+              $history.Contains('ApplyWindowLayout()') -or
+              $history.Contains('RowDefinitions = new RowDefinitions')) {
+            throw 'History must toggle visibility without reallocating grid rows'
+          }
+          # Native resizing must never be driven from a History click or
+          # timer/catalog refresh; Windows controls restored/maximized bounds.
+          $toggle = $history.Substring($history.IndexOf('private void History_OnClick'))
+          if ($toggle -match '\b(?:Height|MinHeight|MaxHeight)\s*=' -or
+              $toggle.Contains('SizeToContent') -or
+              $toggle.Contains('RowDefinitions')) {
+            throw 'History toggle must never mutate bounds or row geometry'
+          }
+          $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
+          if (-not $ntp.Contains('NtpResponseTimeoutException')) {
+            throw 'UDP timeout lost local/remote endpoint diagnostics'
+          }
+          $viewCode = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
+          if (-not $viewCode.Contains('PeerControlProtocol.SendAsync') -or
+              -not $viewCode.Contains('ReconcileRows') -or
+              -not $viewCode.Contains('Rows.Move(')) {
+            throw 'UI must bind to live canonical peer controls and preserve rows'
+          }
+          if ($viewCode.Contains('Verb = "runas"') -or
+              $viewCode.Contains('Process.Start(')) {
+            throw 'Server add/toggle/delete must never install or relaunch a service'
+          }
+          $worker = Get-Content 'src/ARFastSNTP/MultiPeerWorker.cs' -Raw
+          if (-not $worker.Contains('PeerElection.Choose') -or
+              -not $worker.Contains('PeerCatalog') -or
+              -not $worker.Contains('TryStep(') -or
+              -not $worker.Contains('new SemaphoreSlim(4)')) {
+            throw 'Missing bounded peer polling, source selection, or step barrier'
+          }
+          $wizard = Get-Content -LiteralPath 'installer/ARFastSNTP.iss' -Raw
+          if (-not $wizard.Contains('Enter NTP Server IP Address') -or
+              -not $wizard.Contains('FinishedHeadingLabel') -or
+              -not $wizard.Contains('install-result.txt')) {
+            throw 'Inno completion must distinguish service running from verified sync'
+          }
+          if (Test-Path 'publish/dashboard') {
+            throw 'Old WinForms UI must not be bundled into the canonical installer'
+          }
+          Write-Host 'Installer payload verified; legacy WinForms remains source/build fallback.'
+
+      - name: Compile standalone Inno Setup wizard
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $compiler)) {
+            choco install innosetup --version=6.4.0 -y --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compiler installation failed' }
+          }
+          if (-not (Test-Path $compiler)) { throw "ISCC compiler is missing: $compiler" }
+          & $compiler '/Qp' 'installer/ARFastSNTP.iss'
+          if ($LASTEXITCODE -ne 0) { throw "Inno compiler failed ($LASTEXITCODE)" }
+          $installer = 'installer-out/ARFastSNTP-Setup-Windows-x64.exe'
+          if (-not (Test-Path $installer)) { throw 'Installer executable is missing' }
+          $bytes = (Get-Item $installer).Length
+          if ($bytes -lt 1000000) { throw "Suspiciously small installer: $bytes bytes" }
+          Write-Host "Inno Setup compiled: $installer ($bytes bytes)"
+
+      - name: Upload single Windows setup executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARFastSNTP-Inno-Windows-x64
+          path: |
+            installer-out/ARFastSNTP-Setup-Windows-x64.exe
+            LICENSE
+            NOTICE
+            docs/START-HERE.txt
+            docs/INSTALLER-UX-ACCEPTANCE.md
+          if-no-files-found: error
+          retention-days: 14

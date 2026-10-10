@@ -1,0 +1,288 @@
+# AR Fast SNTP — Canonical Handoff (10 October 2026)
+
+> **AUTHORITATIVE TRANSFER NOTE for the next ChatGPT thread.**
+> Read this file and verify the actual GitHub branch/CI before editing. This
+> note records the latest VERIFIED checkpoint and the unresolved real test.
+> It is a source-of-truth handoff, not a claim that networking is fixed.
+
+## 0. Repository, baseline and verified CI
+
+- Owner/repository: **masarray/arintp** (connected GitHub; private access).
+- Feature branch: **feat/fast-sntp-windows-ci**.
+- Draft PR: https://github.com/masarray/arintp/pull/1
+- Latest **code** commit known-good by Windows CI:
+  **1f0f5728b241090700af363e6f814e541d6b2676**
+  https://github.com/masarray/arintp/commit/1f0f5728b241090700af363e6f814e541d6b2676
+- Windows CI #31: **SUCCESS** (verified with GitHub run jobs and artifacts):
+  https://github.com/masarray/arintp/actions/runs/38004214241
+- Confirmed unexpired uploaded artifact: **ARFastSNTP-Inno-Windows-x64**
+  (artifact ID **11650119100**, approximately **115 MB**).
+- Inno Setup version: **0.10.1**, Windows x64, one installer
+  **ARFastSNTP-Setup-Windows-x64.exe**.
+- PR is **DRAFT, UNMERGED**. Keep main untouched unless user explicitly
+  directs merge after Windows acceptance. Never reset to an older branch.
+- **GitHub PR CI caveat confirmed:** even when a commit changes only
+  README/HANDOFF/docs, the workflow pull_request paths filter can run again
+  because GitHub evaluates the entire PR diff against main. A docs-only
+  synchronization commit unexpectedly started CI #32 (run 38006646420).
+  It is REDUNDANT for code verification and must not be described as a
+  regression. The GitHub connector available in this thread cannot cancel
+  workflow runs; cancel it in GitHub UI if still active.
+- For future documentation-only PR commits, use GitHub-supported commit
+  message marker [skip ci] or change documentation in a PR comment instead
+  of assuming that paths filters prevent a run. Be aware skipped required
+  checks may remain pending depending on branch protection.
+- **CI proves compilation/regression/worker smoke/installer packaging; it
+  does NOT prove actual multi-NTP sync, Npcap interop, in-place upgrade,
+  clock stepping, or visual Windows/DPI behavior.**
+
+## 1. User's product goal and fixed constraints
+
+AR Fast SNTP is a **small, reliable Windows time sync client** for an
+AUTHORIZED ISOLATED Siemens SICAM SCC / IEC 61850 commissioning and
+certification PC, not a production SCADA/SOE/historian system.
+
+Expected operator workflow: install ONE time via intelligent Inno Setup;
+the canonical Windows Service installs/updates/starts automatically; the
+monitor opens; user can close the monitor while service stays running.
+From then on use Studio to Add/Delete/Enable/Disable time-server IPs with
+**zero per-click UAC, SmartScreen, helper executables, service reinstall,
+SCM stop/start or settings re-entry**. Only installation/upgrade can request
+Administrator access. Persist config across GUI closure/reboot/upgrade.
+
+GUI direction: **premium calm compact**, ergonomic to non-programmers and
+engineers, shared Arssyut/graphite design tokens. Only ONE product name in
+Windows title bar. ONE secondary compact line for PC Time + PC Sync.
+Main content is the NTP Servers Explorer table: #, per-row elegant switch,
+Material time-server icon, IP, health/status, stratum, offset, server time,
+broadcast evidence and remove icon. An Add button belongs to header.
+History uses Material circle-chevron collapsed by default; expands to
+bounded short event timeline. No wide empty areas, noisy technician jargon,
+duplicative cards, flashing metrics or unnecessary borders. GUI is Avalonia
+on Windows for now; DO NOT waste work migrating OS frameworks.
+
+NTP diagnostics should be contextual and precise (Enabled is not Online;
+sent response is not validated reply; Sync does not mean service merely runs).
+Do not infer Mode 5 broadcast from Mode 4 unicast transactions.
+
+License: GPL-2.0-or-later (LICENSE). Fonts/design provenance:
+docs/DESIGN-TOKEN-PROVENANCE.md. Do not redistribute font files manually.
+
+## 2. How the current code is organized
+
+- src/ARFastSNTP/Program.cs — one worker host, Windows Service wiring.
+- src/ARFastSNTP/NtpProtocol.cs — strict SNTPv3/v4 socket transaction,
+  validates response source IP/UDP 123, origination timestamp, mode, leap,
+  stratum, NTP era and delay. Windows UdpClient has an ephemeral local port.
+- src/ARFastSNTP/NtpResponseTimeoutException.cs — NEW as of 0.10.1:
+  explicit receive-deadline timeout with the **actual Windows local
+  IP:ephemeral port** and the expected server IP:123 in detailed error.
+- src/ARFastSNTP/PeerCatalog.cs and NtpPeer.cs — service-owned canonical
+  IPv4 list in %ProgramData%/ARFastSNTP/peers.json, up to 16, atomic writes,
+  persisted enable state, generation change; older --server becomes NTP1
+  only if the peer catalog did not already exist. Changing peers is not an
+  installer operation.
+- src/ARFastSNTP/PeerControlService.cs and PeerControlProtocol.cs —
+  ACL-protected local Windows named pipe; bounded LIST/ADD/DELETE/ENABLE/
+  DISABLE operations, no remote HTTP/TCP commands. Local INTERACTIVE users,
+  Administrators and SYSTEM are explicitly allowed (review suitability for
+  the particular isolated lab; do not silently widen privilege).
+- src/ARFastSNTP/SourceControlState.cs — protected state and barrier for
+  clock writes; source OFF must not allow a new SetSystemTime afterward.
+- src/ARFastSNTP/MultiPeerWorker.cs — single clock authority, polling at
+  most 4 peers simultaneously, bounded per-peer backoff, per-peer telemetry
+  and event history. Must discard changes in the peer generation and stale
+  samples before Windows correction.
+- src/ARFastSNTP/PeerElection.cs — deterministic conservative source
+  election, not full RFC 5905: strict majority within 250 ms total offset
+  spread, sticky previous good peer. Two conflicting peers => hold stepping.
+  Single validated responder => degraded trusted-lab fallback after
+  repeated samples. Only one winner can discipline the PC clock.
+- src/ARFastSNTP/StatusSnapshot.cs and
+  src/ARFastSNTP.Dashboard/DashboardStatus.cs — JSON status with per-peer
+  metrics and legacy compatibility. Monitor is reader; does NOT poll UDP.
+- src/ARFastSNTP.Studio/MainWindow.axaml and MainWindow.axaml.cs —
+  canonical Avalonia live-monitor and multi-peer Explorer.
+- src/ARFastSNTP.Studio/PeerRowModel.cs, PeerDialogs.cs, EventDisplay.cs —
+  observable rows, compact Add/Remove dialogs, human-readable event time.
+- src/ARFastSNTP.Studio/Design/ — Arssyut-inspired dark graphite palette
+  and centralized spacing/type/control style tokens.
+- installer/ARFastSNTP.iss and src/ARFastSNTP.Setup/ —
+  context-aware Inno Setup and service lifecycle, preserving upgrades and
+  previous-service recovery. Reinstall is NEVER the peer ON/OFF mechanism.
+- tests/ARFastSNTP.Tests/Program.cs and
+  .github/workflows/windows-ci.yml — deterministic regression/smoke and
+  Windows installer build, with fail-fast and CI concurrency coalescing.
+
+Docs to read: README.md; docs/MULTI-NTP-ARCHITECTURE.md;
+docs/ARSAS-NTP-INTEROP.md; docs/INSTALLER-UX-ACCEPTANCE.md;
+docs/DESIGN-TOKEN-PROVENANCE.md; docs/START-HERE.txt.
+
+Historical older WinForms dashboard, 2-byte global SourceControlPipeService
+and SyncWorker still exist as compatibility/source; **the canonical 0.10.x
+installer now deploys the Avalonia Studio and MultiPeerWorker, not the
+old WinForms application.** Do not accidentally re-enable the old UX or
+global toggle endpoint.
+
+## 3. Progress of latest v0.10.1 candidate — CODE/CI VERIFIED ONLY
+
+Completed in code, Windows CI #31 green:
+
+- NTP Server table now uses ONE fixed shared header/row column template,
+  consistent centered #/Use/Stratum/Broadcast, right-aligned offset,
+  13-DIP readable row values, restrained hover and compact spacings.
+- Small PC Time/Sync bar remains secondary; no redundant title.
+- Add/Remove dialogs use shared modal layout, width ~374 DIP, height follows
+  content; no old fixed Height 186/157 blank region. Add rejects duplicate
+  and malformed IPv4 without closing, supports Enter/Escape.
+- History displays local HH:mm:ss + event in stable columns; full original
+  ISO event is retained in tooltip (preserve diagnostic resolution).
+- Network timeout diagnostics contain local IP:ephemeral UDP port and
+  remote IP:123 in row Status tooltip, not repeatedly in primary UI.
+- Synthetic NTP parser regression accepts Mode 4/stratum 2/LOCL analogous
+  to ARSAS when packets reach parser, and rejects unsynchronized LI=3.
+- Existing 0.10.0 multi-peer GUI/engine/installer workflow preserved.
+- CI #31 success verifies build/tests/publish/Inno packing, but visual
+  appearance on actual DPI has not yet been reviewed with NEW screenshots.
+
+DO NOT call this public-stable or merge it based only on green CI.
+
+## 4. CURRENT MAJOR REAL-TEST BLOCKER: ARSAS SNTP No reply
+
+User-supplied screenshots show AR Fast SNTP frequently displaying
+**No reply** while trying several IPs. Separate ARSAS screenshots show:
+
+- ARSAS station-bus SNTP server banner: **192.16.1.33**.
+- ARSAS logs **UDP/123 unavailable (AccessDenied)** and falls back to
+  **Npcap RAW SNTP** on the KM_Test adapter.
+- ARSAS logs Mode 3 request allegedly from **192.16.1.175**, then
+  transmitting a **Mode 4 RAW** reply. That observed client address may
+  be a *different client*, NOT necessarily the current AR Fast SNTP
+  process. Match local source IP/ephemeral port and NTP originate.
+- ARSAS Mode 5 broadcast target **192.16.1.255** is not a unicast server.
+- AR Fast SNTP 192.16.1.175, .176, .177 IPs seen in screenshot are peer
+  configurations. Treat source IP vs server IP separately, do not assume
+  all IPs share one host or adapter. Same-PC topology is UNCONFIRMED.
+- ARSAS current relevant source lives in separate repo **masarray/arsas**:
+  Services/SntpClockService.cs, SntpPacket.cs,
+  SntpRawNpcapTransport.cs, SntpEthernetFrameCodec.cs,
+  SntpNetworkRouteResolver.cs, docs/SNTP_CLOCK_SYNC.md.
+- ARSAS RAW sends a **crafted Ethernet/IPv4/UDP frame via Npcap**; a
+  successfully sent RAW frame does NOT prove Windows delivered an
+  inbound datagram to the connected UdpClient socket. Same-PC RAW
+  injection/loopback is one plausible cause. Other possibilities:
+  wrong NIC/routing/source IP/UDP port, firewall filtering, frame/checksum
+  issue, test referencing an unrelated client, or server LI=3 due its
+  wall-clock health guard. Do NOT claim any one as proven.
+- Parser packet regressions passed, but there is NO verified live RX;
+  distinguish RECEIVE TIMEOUT from REJECTED/INVALID RESPONSE.
+
+Read docs/ARSAS-NTP-INTEROP.md BEFORE touching NTP network engine.
+
+NEXT DIAGNOSTIC PROCEDURE (high priority):
+1. On isolated PC using 0.10.1, configure EXACT ARSAS unicast IP (.33),
+   not directed-broadcast .255; ensure Use ON.
+2. When No reply, hover the row Status: obtain precise local IP:UDP
+   ephemeral port and remote .33:123. Inspect status.json and service
+   logs. If tooltip absent, audit persistence/UI; don't guess.
+3. Capture packets on correct Windows NIC with Wireshark/Npcap:
+   filter udp.port == 123 && ip.addr == 192.16.1.33. Correlate *the
+   exact request* source IP:port and NTP transmit field with Mode 4 reply
+   destination IP:port and origination field. Check direction, IP/UDP
+   checksums, LI, stratum, interface and arrival on receiving IP stack.
+4. Determine whether ARSAS and AR Fast SNTP run on SAME PC vs two PCs.
+   A/B-test with ARSAS server on another physical Windows PC on same
+   isolated segment (or a conventional socket-based NTP server on a
+   machine actually owning UDP 123). Avoid trying to "fix" Npcap RAW
+   same-host injection by weakening client validation.
+5. If Mode 4 reaches the UDP socket but is rejected, diagnose parser
+   error, not receive path. Never report Sync based only on ARSAS
+   "reply sent" counter.
+6. If a true ARSAS defect is confirmed, fix **masarray/arsas** with
+   isolated tests and no IEC61850 regressions, not by making AR Fast
+   SNTP use an untrusted promiscuous/raw receive shortcut.
+
+## 5. Visual acceptance outstanding
+
+The screenshots shown to the previous thread were PRE-0.10.1: modal
+Add/Delete buttons floated above an oversized empty bottom, table header
+alignment and typography felt amateurish, History displayed long ISO
+timestamps. 0.10.1 source changes address those symptoms, but MUST be
+visually verified with a fresh actual Windows screenshot. Acceptance:
+
+- 100/125/150/200% scaling, default and minimum width, 1/3/16 servers;
+  no clip/overflow/cutoff or awkward empty regions.
+- Modal button alignment to bottom/right, coherent title/input/actions,
+  consistent padding, keyboard focus and clear invalid-IP feedback.
+- Table status vs icon: icon green => enabled, **not** network healthy;
+  No reply remains orange even when toggle green. Row order stable.
+- PC Time/Sync secondary; table dominant; no duplicated product title.
+- Collapsed/expanded History fits contents, scroll bounded, event data
+  concise but diagnostically recoverable from tooltip.
+- No per-second text layout flicker, UI thread blocking, excessive
+  redraw, unbounded history, or memory/handle leaks.
+- Keep Arssyut design tokens and Avalonia; do not add unrelated cards,
+  heavy styling, remote web UI or change framework without user approval.
+
+## 6. Known risk and safety/quality gates
+
+- Real Windows time stepping can jump MONTHS/YEARS on isolated test PCs:
+  NTP offsets must be freshly validated and bound to the exact response;
+  change in source generation must forbid stale correction. NEVER run
+  destructive large jumps on a production SCADA/SOE/historian computer.
+- Existing policy is a small trusted-lab SNTP client, NOT complete NTPv4,
+  chrony, NTS, authenticated or traceable GPS clock. Broadcast field
+  remains unknown/not measured without separate Mode 5 receiver.
+- Verify restart/reboot preference persistence, one canonical service,
+  installer upgrade from 0.9.3/0.10.0, recovery/rollback,
+  simultaneous Studio instances and pipe ACLs; CI does not do this.
+- Test 1, 2, 3 and 16 peers, outliers, two conflicting servers, all OFF,
+  and failover; prove no UAC/reinstall for per-peer operations.
+- Research/consider improving sample-age tracking and selection when one
+  peer loses replies; DO NOT silently change consensus/clock-step policy.
+- Investigate resource/CPU stability under 24-hour soak and churn
+  (add/remove/toggle), and proper live-event coalescing.
+- Windows installer is currently **unsigned**; OS reputation warning on
+  installer itself remains possible. Do NOT bypass SmartScreen or firewall.
+  Per-server click workflow MUST NOT launch privileged processes.
+
+## 7. Suggested next-thread work order, anti-naive/low-CI
+
+P0 (before coding): inspect latest PR head, CI #31 and installed screenshot;
+read this handoff and relevant source. Do not recreate a repository,
+start from old web/WinForms dashboard, overwrite main, or re-implement
+completed multi-peer work.
+
+P1: reproduce & locate ARSAS/AR Fast SNTP UDP receive break with real
+endpoint and packet-capture evidence. In parallel, request actual post-
+0.10.1 UI screenshot if absent. Correct only confirmed root cause.
+
+P2: build a deterministic, isolated integration test for ARSAS server
+Mode 4 -> AR Fast SNTP parser/worker (without changing CI clock). A
+synthetic socket transport may require a DI port abstraction to avoid
+binding privileged UDP/123 on CI; do not globally weaken production
+source validation.
+
+P3: visually polish based on new screenshot, using canonical design
+tokens and layout tests; no duplicate headers/cards. Regression-test
+network and UI together, with test matrix and cleanup.
+
+P4: test Windows installer/service upgrade, 2-PC NTP failover,
+large-step lab-only recovery, extended resource stability. Do NOT
+promote Draft PR or public release until user validates acceptance.
+
+CI economy: batch a coherent set of fixes per code commit, verify locally
+or logically before push, use existing windows-ci.yml fail-fast +
+concurrency cancellation. Do not repeatedly poll CI every second or
+force workflow runs for documentation-only changes. **PR-wide path filters
+are not a reliable way to suppress docs-only synchronization runs**:
+prefer a PR comment or the [skip ci] commit marker after assessing the
+impact on required-check status.
+
+## 8. Do not erase progress / handoff completion requirements
+
+After new thread changes code, update this file or a newer dated handoff,
+add a short factual PR comment (commit/run/actual pass/fail, what remains),
+include valid installer artifact URL only AFTER confirmed uploaded,
+and keep branch/PR Draft by default. The user expects direct GitHub work
+and honest verified outcomes, not theoretical suggestions alone.

@@ -1,0 +1,22 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ARFastSNTP.Studio.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Design/ArColors.axaml" />
+        <ResourceInclude Source="/Design/ArTokens.axaml" />
+        <ResourceInclude Source="/Design/ArTypography.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- Product-semantic additions; upstream Arssyut tokens are unchanged. -->
+      <SolidColorBrush x:Key="SntpBrush.Primary" Color="{StaticResource ArColor.Success}" />
+      <SolidColorBrush x:Key="SntpBrush.Warn" Color="{StaticResource ArColor.Warning}" />
+      <SolidColorBrush x:Key="SntpBrush.Fault" Color="{StaticResource ArColor.Record}" />
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme DensityStyle="Compact" />
+    <StyleInclude Source="/Design/SntpControls.axaml" />
+  </Application.Styles>
+</Application>

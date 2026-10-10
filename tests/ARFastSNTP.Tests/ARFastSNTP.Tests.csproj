@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/ARFastSNTP/ARFastSNTP.csproj" />
+    <!-- Compile the UI's dependency-free status reader in the regression harness.
+         No WinForms display or window session required. -->
+    <Compile Include="../../src/ARFastSNTP.Dashboard/DashboardStatus.cs" Link="DashboardStatus.cs" />
+    <!-- Pure read-only Studio presenter: test status semantics without launching Avalonia. -->
+    <Compile Include="../../src/ARFastSNTP.Studio/StudioStatusPresenter.cs" Link="StudioStatusPresenter.cs" />
+    <Compile Include="../../src/ARFastSNTP.Studio/EventDisplay.cs" Link="EventDisplay.cs" />
+  </ItemGroup>
+</Project>
