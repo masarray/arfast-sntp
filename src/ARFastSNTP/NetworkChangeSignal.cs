@@ -36,6 +36,10 @@ internal sealed class NetworkChangeSignal : IDisposable
         _wake();
     }
 
+    // Same coalesced wake path for a missed-NIC-event fallback; no extra
+    // timer or new thread is created by this method.
+    internal void ReportAdapterChanged() => Notify();
+
     internal long Version => Interlocked.Read(ref _version);
 
     internal TimeSpan QuietFor

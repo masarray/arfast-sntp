@@ -542,6 +542,15 @@ string boundedDiagnosticJson = System.Text.Json.JsonSerializer.Serialize(diagnos
 Check("16-peer diagnostic journal fits Studio 128 KiB reader guard",
     System.Text.Encoding.UTF8.GetByteCount(boundedDiagnosticJson) <= 131072);
 
+var adapterFingerprint = new NetworkAdapterFingerprint();
+Check("initial IPv4 adapter survey does not trigger spurious reconnection",
+    !adapterFingerprint.Observe("ethernet:down:[]"));
+Check("unchanged IPv4 adapter snapshot is coalesced",
+    !adapterFingerprint.Observe("ethernet:down:[]"));
+Check("Ethernet route change detected with unchanged Wi-Fi",
+    adapterFingerprint.Observe("ethernet:up:192.16.1.175|wifi:up:192.168.1.7"));
+Check("route settling to same signature does not re-trigger",
+    !adapterFingerprint.Observe("ethernet:up:192.16.1.175|wifi:up:192.168.1.7"));
 Check("network wakeup debounce is bounded, no per-event poll loop",
     NetworkRecoveryPolicy.Debounce >= TimeSpan.FromMilliseconds(250) &&
     NetworkRecoveryPolicy.Debounce <= TimeSpan.FromSeconds(1) &&

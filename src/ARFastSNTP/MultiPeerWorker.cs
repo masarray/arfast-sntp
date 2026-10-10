@@ -49,6 +49,7 @@ internal sealed class MultiPeerWorker : BackgroundService
     private long _lastCatalogGeneration = -1;
     private long _lastNetworkRearmStamp;
     private long _networkRecoveryStamp;
+    private long _lastAdapterSurveyStamp;
 
     internal MultiPeerWorker(SyncOptions options, PeerCatalog catalog,
         ILogger<MultiPeerWorker> logger)
@@ -65,6 +66,7 @@ internal sealed class MultiPeerWorker : BackgroundService
         _logger.LogInformation("Multi-peer SNTP worker initialized; correction={Allowed}",
             _options.AllowStep);
         using var network = new NetworkChangeSignal(_catalog.Wake);
+        var adapterFingerprint = new NetworkAdapterFingerprint();
         long lastHandledNetworkVersion = network.Version;
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -155,6 +157,23 @@ internal sealed class MultiPeerWorker : BackgroundService
             }
 
             var enabled = peers.Where(p => p.Enabled).ToArray();
+
+            // Only with active peers, sample local IPv4 adapter/gateway state
+            // every 8s as an inexpensive fallback for missed native events.
+            // Never gate NTP correctness on the general network-online flag.
+            if (enabled.Length != 0 &&
+                (_lastAdapterSurveyStamp == 0 ||
+                 Stopwatch.GetElapsedTime(_lastAdapterSurveyStamp) >= TimeSpan.FromSeconds(8)))
+            {
+                _lastAdapterSurveyStamp = Stopwatch.GetTimestamp();
+                if (adapterFingerprint.Check())
+                {
+                    network.ReportAdapterChanged();
+                    // Route/gateway fingerprint changed; allow the normal
+                    // debounced supervisor path to clear old samples first.
+                    continue;
+                }
+            }
             if (enabled.Length == 0)
             {
                 _selected = null;
