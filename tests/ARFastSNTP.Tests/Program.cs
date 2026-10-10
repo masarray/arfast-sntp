@@ -542,6 +542,27 @@ string boundedDiagnosticJson = System.Text.Json.JsonSerializer.Serialize(diagnos
 Check("16-peer diagnostic journal fits Studio 128 KiB reader guard",
     System.Text.Encoding.UTF8.GetByteCount(boundedDiagnosticJson) <= 131072);
 
+Check("network wakeup debounce is bounded, no per-event poll loop",
+    NetworkRecoveryPolicy.Debounce >= TimeSpan.FromMilliseconds(250) &&
+    NetworkRecoveryPolicy.Debounce <= TimeSpan.FromSeconds(1) &&
+    NetworkRecoveryPolicy.MinimumRearm >= NetworkRecoveryPolicy.Debounce);
+Check("new network route caps only transport retry",
+    NetworkRecoveryPolicy.TransportBackoff(5, recovering: false) == TimeSpan.FromSeconds(30) &&
+    NetworkRecoveryPolicy.TransportBackoff(5, recovering: true) == TimeSpan.FromSeconds(2));
+Check("RATE pacing increases rather than busy retries",
+    NetworkRecoveryPolicy.RateBackoff(1) == TimeSpan.FromSeconds(60) &&
+    NetworkRecoveryPolicy.RateBackoff(2) == TimeSpan.FromSeconds(120) &&
+    NetworkRecoveryPolicy.RateBackoff(5) >= TimeSpan.FromSeconds(480));
+Check("DENY and RSTR permanently stop polling during worker lifetime",
+    NetworkRecoveryPolicy.IsPermanentDenial("DENY") &&
+    NetworkRecoveryPolicy.IsPermanentDenial("RSTR") &&
+    !NetworkRecoveryPolicy.IsPermanentDenial("RATE"));
+Check("link changes never reset RATE, DENY, RSTR suppression",
+    NetworkRecoveryPolicy.CanRearm(null) &&
+    !NetworkRecoveryPolicy.CanRearm("RATE") &&
+    !NetworkRecoveryPolicy.CanRearm("DENY") &&
+    !NetworkRecoveryPolicy.CanRearm("RSTR"));
+
 // Exercise the *real* worker with a fully disabled catalog. No UDP traffic,
 // service registration or system-clock mutations are permitted in this test.
 string idleRoot = Path.Combine(Path.GetTempPath(), "arfastsntp-idle-" +
@@ -577,6 +598,42 @@ try
             root.GetProperty("State").GetString() == "NTP off" &&
             root.GetProperty("RequestCount").GetInt64() == 0 &&
             !root.GetProperty("SourceEnabled").GetBoolean());
+
+        // An actual IPC-equivalent catalog mutation must wake a worker that
+        // had no active peer. No service restart or UAC and no privileged
+        // SetSystemTime: the entire test is monitor-only.
+        offCatalog.Mutate("enable", "127.0.0.1");
+        stopwatch.Restart();
+        bool awakened = false;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
+        {
+            await Task.Delay(100);
+            if (!DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+                    out var afterEnable, out _) || afterEnable is null)
+                continue;
+            if (afterEnable.RequestCount > 0 && afterEnable.SourceEnabled)
+            {
+                awakened = true;
+                break;
+            }
+        }
+        Check("all-OFF to ON awakens real worker without stale retry delay", awakened);
+        offCatalog.Mutate("disable", "127.0.0.1");
+        stopwatch.Restart();
+        bool returnedIdle = false;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
+        {
+            await Task.Delay(100);
+            if (!DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+                    out var afterDisable, out _) || afterDisable is null)
+                continue;
+            if (afterDisable.State == "NTP off" && !afterDisable.SourceEnabled)
+            {
+                returnedIdle = true;
+                break;
+            }
+        }
+        Check("ON to all-OFF returns to stable idle without worker restart", returnedIdle);
     }
     finally
     {

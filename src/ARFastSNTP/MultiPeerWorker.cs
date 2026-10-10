@@ -441,6 +441,10 @@ internal sealed class MultiPeerWorker : BackgroundService
             }
             else
             {
+                // The prior RATE interval has already elapsed if a transport
+                // probe was allowed to run. Keep the escalation count, but
+                // classify this new failure as transport, not a fresh RATE.
+                if (rt.KissCode == "RATE") rt.KissCode = null;
                 // Transport error only. A newly restored route temporarily
                 // caps retry delay without bypassing a server-side KoD.
                 bool recovering = _networkRecoveryStamp != 0 &&
