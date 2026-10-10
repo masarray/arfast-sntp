@@ -114,6 +114,25 @@ Check("large drift triggers burst", PollPolicy.RequiresBurst(true,
     new SntpSample(TimeSpan.FromDays(365), 12, 1)));
 Check("stable interval bounded to 3s",
     PollPolicy.NextInterval(true, true) == TimeSpan.FromSeconds(3));
+Check("startup confirmation scheduled sooner than stable polling",
+    PollPolicy.PeerInterval(1) == TimeSpan.FromMilliseconds(750) &&
+    PollPolicy.PeerInterval(2) == PollPolicy.StableInterval);
+Check("independent Mode 4 confirmation must agree with burst median",
+    PollPolicy.CoherentConfirmation(
+        new SntpSample(TimeSpan.FromSeconds(5400), 3.4, 3),
+        new SntpSample(TimeSpan.FromSeconds(5400).Add(TimeSpan.FromMilliseconds(7)), 3.6, 3)));
+Check("incoherent second-round confirmation cannot authorize correction",
+    !PollPolicy.CoherentConfirmation(
+        new SntpSample(TimeSpan.FromSeconds(5400), 3.4, 3),
+        new SntpSample(TimeSpan.FromSeconds(5401), 3.6, 3)));
+Check("already due second confirmation has zero artificial post-round delay",
+    PollPolicy.NextSupervisorWait(TimeSpan.FromMilliseconds(-1700), false) == TimeSpan.Zero);
+Check("healthy startup followup uses monotonic 750ms deadline",
+    PollPolicy.NextSupervisorWait(TimeSpan.FromMilliseconds(750), false) == TimeSpan.FromMilliseconds(750));
+Check("unsynchronized active heartbeat remains at most one second",
+    PollPolicy.NextSupervisorWait(TimeSpan.FromSeconds(30), false) == TimeSpan.FromSeconds(1));
+Check("stable source polling remains bounded at 3 seconds",
+    PollPolicy.NextSupervisorWait(TimeSpan.FromSeconds(30), true) == TimeSpan.FromSeconds(3));
 Check("monitor large offset backs off to 5s",
     PollPolicy.NextInterval(false, false) == TimeSpan.FromSeconds(5));
 Check("correction cycle fast 1s",
