@@ -109,6 +109,7 @@ jobs:
               -not $xaml.Contains('x:Name="HistoryPanel"') -or
               -not $xaml.Contains('RowDefinitions="32,44,*,Auto"') -or
               -not $xaml.Contains('MinHeight="380"') -or
+              -not $xaml.Contains('MaxWidth="1120" HorizontalAlignment="Center"') -or
               $xaml.Contains('MaxHeight="830"')) {
             throw 'Multi-peer Explorer or safe bounded table/history layout is missing'
           }
@@ -151,7 +152,7 @@ jobs:
           # Native resizing must never be driven from a History click or
           # timer/catalog refresh; Windows controls restored/maximized bounds.
           $toggle = $history.Substring($history.IndexOf('private void History_OnClick'))
-          if ($toggle -match '\\b(?:Height|MinHeight|MaxHeight)\\s*=' -or
+          if ($toggle -match '\b(?:Height|MinHeight|MaxHeight)\s*=' -or
               $toggle.Contains('SizeToContent')) {
             throw 'History toggle must never mutate the native window bounds'
           }

@@ -8,6 +8,7 @@
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
   <Grid x:Name="MainLayout" Margin="16,9,16,12"
+        MaxWidth="1120" HorizontalAlignment="Center"
         RowDefinitions="32,*,Auto" RowSpacing="9" ClipToBounds="True">
 
     <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
