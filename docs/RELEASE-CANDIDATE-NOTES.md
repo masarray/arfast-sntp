@@ -1,6 +1,6 @@
 # AR Fast SNTP — Pre-release acceptance
 
-**Public Windows installer:** v0.10.2, Avalonia Studio + one Windows Service, up to 16 unicast IPv4 NTP sources. Public availability does **not** imply industrial/SCADA production certification; the following extended acceptance gates remain open.
+**Public Windows installer:** v0.10.3, Avalonia Studio + one Windows Service, up to 16 unicast IPv4 NTP sources. Public availability does **not** imply industrial/SCADA production certification; the following extended acceptance gates remain open.
 
 ## Evidence collected
 - Actual Windows screenshots show Cloudflare `162.159.200.1` and `162.159.200.123` delivered validated stratum-3 NTP samples. A small (+179.4 ms) Windows correction was logged in an earlier test.

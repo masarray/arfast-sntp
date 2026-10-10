@@ -97,16 +97,22 @@ internal sealed class MultiPeerWorker : BackgroundService
                 {
                     lastHandledNetworkVersion = newest;
                     long nowStamp = Stopwatch.GetTimestamp();
-                    if (_lastNetworkRearmStamp == 0 ||
-                        Stopwatch.GetElapsedTime(_lastNetworkRearmStamp, nowStamp) >=
-                            NetworkRecoveryPolicy.MinimumRearm)
+                    // NetworkChange callbacks can be noisy (virtual NICs,
+                    // interface metrics and transient Windows notifications).
+                    // Do not erase perfectly valid time samples without a
+                    // material observed IPv4 adapter/address/gateway change.
+                    // The low-frequency fallback uses the SAME fingerprint.
+                    bool realAdapterChange = peers.Any(p => p.Enabled) &&
+                        adapterFingerprint.Check();
+                    if (realAdapterChange &&
+                        (_lastNetworkRearmStamp == 0 ||
+                         Stopwatch.GetElapsedTime(_lastNetworkRearmStamp, nowStamp) >=
+                             NetworkRecoveryPolicy.MinimumRearm))
                     {
                         _lastNetworkRearmStamp = nowStamp;
                         _networkRecoveryStamp = nowStamp;
-                        // Never carry an apparently "Synced" status across an
-                        // address/route change. Re-evaluate with fresh NTP data.
                         DiscardSamples(preserveVerification: true);
-                        NoteOnce("Network address/availability changed; rechecking NTP sources.");
+                        NoteOnce("IPv4 adapter/address/gateway changed; rechecking NTP sources.");
                     }
                 }
             }
@@ -334,15 +340,21 @@ internal sealed class MultiPeerWorker : BackgroundService
             TraceDecision(peers, overallState, chosen, decision.Reason, evt);
             Publish(peers, overallState, primary, evt ?? decision.Reason,
                 decision.Degraded);
-            // Responsive control mutations, but polling cadence remains bounded.
-            try
-            {
-                await _catalog.WaitAsync(
-                    chosen is not null && primary.HasValue &&
-                    PollPolicy.IsSynchronized(primary.Value.Offset)
-                        ? PollPolicy.StableInterval : TimeSpan.FromSeconds(1),
-                    stoppingToken);
-            }
+            // A completed round can consume the whole 2s timeout of other
+            // unreachable servers. An already-due confirmation must NOT wait
+            // another unconditional second, nor inherit the stable 3s poll.
+            // RATE/DENY backoff is preserved in each peer's NextAt.
+            TimeSpan earliest = enabled
+                .Select(p => _runtime[p.Address])
+                .Where(rt => !NetworkRecoveryPolicy.IsPermanentDenial(rt.KissCode))
+                .Select(rt => rt.NextAt == 0 ? TimeSpan.Zero :
+                    Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), rt.NextAt))
+                .DefaultIfEmpty(PollPolicy.StableInterval)
+                .Min();
+            TimeSpan wait = PollPolicy.NextSupervisorWait(
+                earliest, chosen is not null && primary.HasValue &&
+                PollPolicy.IsSynchronized(primary.Value.Offset));
+            try { await _catalog.WaitAsync(wait, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }
@@ -398,7 +410,19 @@ internal sealed class MultiPeerWorker : BackgroundService
             var first = await NtpProtocol.QueryAsync(server, _options.ServerYear, token)
                 .ConfigureAwait(false);
             SntpSample sample = first;
-            if (rt.Streak == 0 || first.Offset.Duration() > PollPolicy.StepThreshold)
+            if (rt.Streak == 1 && rt.Sample is SntpSample prior)
+            {
+                // A new independently originated Mode-4 reply checks the
+                // previous coherent three-reply burst. Keep the full NTP
+                // parser, source binding and offset-spread validation.
+                // Repeating all three packets for confirmation increases
+                // load without adding a separate confirmation epoch.
+                if (!PollPolicy.CoherentConfirmation(prior, first))
+                    throw new InvalidOperationException(
+                        "NTP confirmation offset differs from initial burst.");
+                Interlocked.Increment(ref _accepted);
+            }
+            else if (rt.Streak == 0 || first.Offset.Duration() > PollPolicy.StepThreshold)
             {
                 await Task.Delay(100, token).ConfigureAwait(false);
                 if (!_catalog.IsCurrent(address, generation)) return;
@@ -419,14 +443,14 @@ internal sealed class MultiPeerWorker : BackgroundService
             if (!_catalog.IsCurrent(address, generation)) return;
             rt.Sample = sample;
             rt.SeenAt = Stopwatch.GetTimestamp();
+            rt.Streak = Math.Min(rt.Streak + 1, 100);
             rt.NextAt = rt.SeenAt + (long)(Stopwatch.Frequency *
-                PollPolicy.StableInterval.TotalSeconds);
+                PollPolicy.PeerInterval(rt.Streak).TotalSeconds);
             rt.LastProbeInRound = true;
             if (rt.State != "Online")
                 rt.PendingEvent = address + ": NTP reply validated.";
             rt.State = "Online";
             rt.Error = null;
-            rt.Streak = Math.Min(rt.Streak + 1, 100);
             rt.Failures = 0;
             rt.KissCode = null;
             rt.RateStrikes = 0;
