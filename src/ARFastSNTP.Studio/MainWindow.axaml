@@ -2,13 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
         Title="AR Fast SNTP"
-        Width="925" Height="510" MinWidth="855" MinHeight="275" MaxHeight="830"
+        Width="925" Height="510" MinWidth="855" MinHeight="380"
         SizeToContent="Manual"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
   <Grid x:Name="MainLayout" Margin="16,9,16,12"
-        RowDefinitions="32,*,Auto" RowSpacing="9">
+        RowDefinitions="32,*,Auto" RowSpacing="9" ClipToBounds="True">
 
     <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
     <Grid Grid.Row="0" ColumnDefinitions="Auto,18,*,Auto" VerticalAlignment="Center">
@@ -42,9 +42,10 @@
     </Grid>
 
     <!-- Server grid is the information center. No unused blank rows. -->
-    <Border Grid.Row="1" CornerRadius="9" Padding="13,11,13,10"
-            Background="{DynamicResource ArBrush.Surface1}">
-      <Grid RowDefinitions="32,32,*,Auto" RowSpacing="3">
+    <Border Grid.Row="1" CornerRadius="9" Padding="13,10,13,10"
+            Background="{DynamicResource ArBrush.Surface1}" ClipToBounds="True">
+      <!-- Only the row viewport stretches. Header and data rows share 44 DIP. -->
+      <Grid RowDefinitions="32,44,*,Auto" RowSpacing="0" ClipToBounds="True">
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="12">
           <TextBlock Text="NTP Servers" FontSize="15" FontWeight="SemiBold"
                      VerticalAlignment="Center"/>
@@ -62,7 +63,8 @@
             </StackPanel>
           </Button>
         </Grid>
-        <Border Grid.Row="1" Background="{DynamicResource ArBrush.Surface2}"
+        <Border Grid.Row="1" Height="44"
+                Background="{DynamicResource ArBrush.Surface2}"
                 CornerRadius="6" Padding="8,0">
           <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
             <TextBlock Text="#" Classes="table-heading" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -79,13 +81,14 @@
           </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="2" MinHeight="44" MaxHeight="332"
-                      VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="2" MinHeight="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto" ClipToBounds="True">
           <ItemsControl ItemsSource="{Binding Rows}">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Border Classes="ntp-row" Classes.zebra="{Binding IsZebra}"
-                        Height="44" Margin="0,1" Padding="8,0"
+                        Height="44" Margin="0" Padding="8,0"
                         CornerRadius="6">
                   <Grid ColumnDefinitions="29,48,*,104,66,108,116,80,30" ColumnSpacing="5">
                   <TextBlock Text="{Binding Number}" Classes="table-value"
@@ -148,7 +151,8 @@
       </Grid>
     </Border>
 
-    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto" RowSpacing="6" MinHeight="32">
+    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,0" RowSpacing="0"
+          ClipToBounds="True">
       <Grid Grid.Row="0" ColumnDefinitions="*,34" ColumnSpacing="4">
       <Button Grid.Column="0" Classes="ar" Background="Transparent" BorderThickness="0"
               Padding="3,6" HorizontalContentAlignment="Stretch"
@@ -177,7 +181,8 @@
       </Button>
       </Grid>
       <ScrollViewer x:Name="HistoryScroll" Grid.Row="1" IsVisible="False"
-                    VerticalScrollBarVisibility="Auto">
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto" ClipToBounds="True">
         <StackPanel x:Name="HistoryEvents" Margin="12,2,8,8" Spacing="7"/>
       </ScrollViewer>
     </Grid>
