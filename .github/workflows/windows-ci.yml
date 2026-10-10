@@ -106,8 +106,11 @@ jobs:
               -not $xaml.Contains('PeerDelete_OnClick') -or
               -not $xaml.Contains('SizeToContent="Manual"') -or
               -not $xaml.Contains('x:Name="MainLayout"') -or
-              -not $xaml.Contains('x:Name="HistoryPanel"')) {
-            throw 'Multi-peer Explorer or bounded split-history layout is missing'
+              -not $xaml.Contains('x:Name="HistoryPanel"') -or
+              -not $xaml.Contains('RowDefinitions="32,44,*,Auto"') -or
+              -not $xaml.Contains('MinHeight="380"') -or
+              $xaml.Contains('MaxHeight="830"')) {
+            throw 'Multi-peer Explorer or safe bounded table/history layout is missing'
           }
           if ($xaml.Contains('x:Name="SourceToggle"') -or
               $xaml.Contains('Content="+ Add server"')) {
@@ -115,6 +118,8 @@ jobs:
           }
           $columnLayout = 'ColumnDefinitions="29,48,*,104,66,108,116,80,30"'
           if (-not $xaml.Contains('Classes="ntp-row"') -or
+              -not $xaml.Contains('Height="44" Margin="0"') -or
+              -not $xaml.Contains('Grid.Row="1" Height="44"') -or
               -not $xaml.Contains('Classes="table-value"') -or
               $xaml.Split(@($columnLayout), [System.StringSplitOptions]::None).Length -ne 3 -or
               -not $xaml.Contains('Text="RTT"') -or
@@ -137,10 +142,18 @@ jobs:
           $history = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
           if (-not $history.Contains('EventDisplay.Format') -or
               -not $history.Contains('Grid.SetColumn(description, 1)') -or
-              -not $history.Contains('ApplyWindowLayout()') -or
-              -not $history.Contains('new RowDefinitions("32,Auto,*")') -or
-              -not $history.Contains('new RowDefinitions("32,*,Auto")')) {
-            throw 'History must retain aligned events and two bounded resize layouts'
+              -not $history.Contains('History_OnClick') -or
+              -not $history.Contains('"32,3*,2*" : "32,*,Auto"') -or
+              -not $history.Contains('"32,*" : "32,0"') -or
+              $history.Contains('ApplyWindowLayout()')) {
+            throw 'History must retain star-allocated, non-overlapping states'
+          }
+          # Native resizing must never be driven from a History click or
+          # timer/catalog refresh; Windows controls restored/maximized bounds.
+          $toggle = $history.Substring($history.IndexOf('private void History_OnClick'))
+          if ($toggle -match '\\b(?:Height|MinHeight|MaxHeight)\\s*=' -or
+              $toggle.Contains('SizeToContent')) {
+            throw 'History toggle must never mutate the native window bounds'
           }
           $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
           if (-not $ntp.Contains('NtpResponseTimeoutException')) {
