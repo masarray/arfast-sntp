@@ -12,7 +12,7 @@
   <a href="docs/MULTI-NTP-ARCHITECTURE.md">Architecture</a>
 </p>
 
-> **Public preview v0.10.1 — not production certified.** This is an unsigned Windows build for trusted, isolated commissioning/test PCs. Do **not** use it to discipline time on live SCADA, SOE, historian, or other critical systems. Independent-source failover, large time jumps, upgrade/rollback and DPI acceptance remain under test ([tracking issue](https://github.com/masarray/arfast-sntp/issues/2)).
+> **Public Windows release (unsigned).** Intended for authorized engineering, commissioning and test PCs. Do **not** use it to discipline time on live SCADA, SOE, historian or other critical systems. Extended independent-reference certification, upgrade rollback, code signing and long-duration soak are tracked in [Issue #2](https://github.com/masarray/arfast-sntp/issues/2).
 
 ## What is AR Fast SNTP?
 
@@ -28,16 +28,18 @@ AR Fast SNTP combines a calm, compact **Avalonia Studio** with **one persistent 
 
 ## Download and install
 
-**[Download v0.10.1 Preview for Windows x64](https://masarray.github.io/arfast-sntp/download.html)**
+**[Download latest Windows x64 installer (.exe)](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe)**
 
-The installer is published as **ARFastSNTP-Setup-Windows-x64.exe** in the [v0.10.1 Preview GitHub Release](https://github.com/masarray/arfast-sntp/releases/tag/v0.10.1-preview.1). A matching **.sha256** file is provided to verify integrity. Do not download unofficial mirrors.
+[Download page](https://masarray.github.io/arfast-sntp/download.html) · [Latest release notes](https://github.com/masarray/arfast-sntp/releases/latest) · [SHA-256 file](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe.sha256)
+
+The single Inno Setup executable contains Avalonia Studio, the Windows Service and setup helper—there is **no separately installed runtime or ZIP to assemble**. The same stable installer filename is used in every stable GitHub Release so website and README links automatically resolve to the newest release. Do not download unofficial mirrors.
 
 1. On a **test/commissioning PC**, download the installer and compare its SHA-256 against the published checksum.
 2. Run the Inno installer as administrator. Enter a reachable **unicast IPv4 NTP server** (UDP port 123).
 3. Open **AR Fast SNTP Studio** from Start. Manage subsequent server IPs using the built-in Add/Delete/Use controls.
 4. For **monitor-only** lab installation (no PC time correction), run the installer with **`/LABSYNC=0`**. **Normal installer behavior enables clock correction** after a suitable NTP reference is accepted, so only use the default on a test PC where time changes are permitted.
 
-The installer is **unsigned**. Windows SmartScreen or antivirus may warn about an unfamiliar executable. Verify the official release source and SHA-256; do not disable protection or create broad exclusions.
+The installer is **unsigned**. Windows SmartScreen or antivirus may warn about an unfamiliar executable. Verify the official GitHub Release and SHA-256 first; do not disable protection or create broad exclusions. A release being public is not a claim of industrial time-certification.
 
 ### Uninstall
 

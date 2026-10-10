@@ -4,7 +4,7 @@ AppId={{A9AEFEC9-42AE-4BDC-A69C-F2053D0D97A0}
 AppName=AR Fast SNTP
 ; Shared multi-resolution Windows app and installer icon.
 SetupIconFile=..\assets\favicon\favicon.ico
-AppVersion=0.10.1
+AppVersion=0.10.2
 DefaultDirName={autopf}\ARFastSNTP
 UsePreviousAppDir=no
 DisableDirPage=yes
