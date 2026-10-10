@@ -104,17 +104,29 @@ jobs:
               -not $xaml.Contains('AddServer_OnClick') -or
               -not $xaml.Contains('PeerToggle_OnClick') -or
               -not $xaml.Contains('PeerDelete_OnClick') -or
-              -not $xaml.Contains('SizeToContent="Height"')) {
-            throw 'Multi-peer Explorer or content-sized layout is missing'
+              -not $xaml.Contains('SizeToContent="Manual"') -or
+              -not $xaml.Contains('x:Name="MainLayout"') -or
+              -not $xaml.Contains('x:Name="HistoryPanel"')) {
+            throw 'Multi-peer Explorer or bounded split-history layout is missing'
           }
           if ($xaml.Contains('x:Name="SourceToggle"') -or
               $xaml.Contains('Content="+ Add server"')) {
             throw 'Old single-server UI was accidentally restored'
           }
+          $columnLayout = 'ColumnDefinitions="29,48,*,104,66,108,116,80,30"'
           if (-not $xaml.Contains('Classes="ntp-row"') -or
               -not $xaml.Contains('Classes="table-value"') -or
-              -not $xaml.Contains('ColumnDefinitions="29,48,*,104,66,106,116,80,30"')) {
-            throw 'NTP Explorer lost shared alignment and readable row typography'
+              $xaml.Split(@($columnLayout), [System.StringSplitOptions]::None).Length -ne 3 -or
+              -not $xaml.Contains('Text="RTT"') -or
+              -not $xaml.Contains('Text="{Binding Rtt}"') -or
+              -not $xaml.Contains('ToolTip.Tip="RTT (Round-Trip Time)') -or
+              -not $xaml.Contains('Classes.zebra="{Binding IsZebra}"')) {
+            throw 'NTP Explorer lost aligned RTT columns, RTT help or subtle zebra rows'
+          }
+          $rowStyle = Get-Content 'src/ARFastSNTP.Studio/Design/SntpControls.axaml' -Raw
+          if (-not $rowStyle.Contains('Border.ntp-row.zebra') -or
+              -not $rowStyle.Contains('Border.ntp-row:pointerover')) {
+            throw 'Zebra rows must retain their subtle background and hover state'
           }
           $dialog = Get-Content 'src/ARFastSNTP.Studio/PeerDialogs.cs' -Raw
           if (-not $dialog.Contains('SizeToContent = SizeToContent.Height') -or
@@ -124,8 +136,11 @@ jobs:
           }
           $history = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml.cs' -Raw
           if (-not $history.Contains('EventDisplay.Format') -or
-              -not $history.Contains('Grid.SetColumn(description, 1)')) {
-            throw 'History must retain compact aligned event/time layout'
+              -not $history.Contains('Grid.SetColumn(description, 1)') -or
+              -not $history.Contains('ApplyWindowLayout()') -or
+              -not $history.Contains('new RowDefinitions("32,Auto,*")') -or
+              -not $history.Contains('new RowDefinitions("32,*,Auto")')) {
+            throw 'History must retain aligned events and two bounded resize layouts'
           }
           $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
           if (-not $ntp.Contains('NtpResponseTimeoutException')) {
