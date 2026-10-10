@@ -129,6 +129,7 @@ internal sealed class MultiPeerWorker : BackgroundService
             var failedStates = enabled.Select(p => _runtime[p.Address].State).ToArray();
             string overallState = chosen is not null ? "Verifying"
                 : eligible.Length != 0 ? "Source conflict"
+                : failedStates.Contains("Local target") ? "Local target"
                 : failedStates.Contains("Invalid reply") ? "Invalid reply"
                 : failedStates.Contains("Denied") ? "Denied"
                 : failedStates.Contains("Rate limited") ? "Rate limited"
@@ -261,22 +262,9 @@ internal sealed class MultiPeerWorker : BackgroundService
             rt.SeenAt = 0;
             rt.Streak = 0;
             rt.Failures = Math.Min(rt.Failures + 1, 5);
-            string nextState = ex switch
-            {
-                NtpKissOfDeathException { Code: "DENY" or "RSTR" } => "Denied",
-                NtpKissOfDeathException { Code: "RATE" } => "Rate limited",
-                NtpKissOfDeathException => "Invalid reply",
-                NtpInvalidResponseException => "Invalid reply",
-                NtpResponseTimeoutException => "No reply",
-                System.Net.Sockets.SocketException => "Network error",
-                IOException => "Network error",
-                InvalidOperationException => "Invalid sample",
-                _ => "No reply"
-            };
+            string nextState = NtpFailureClassifier.State(ex);
             if (rt.State != nextState)
-                rt.PendingEvent = address + ": " +
-                    (ex is NtpResponseTimeoutException or OperationCanceledException
-                        ? "No UDP reply at the Windows socket." : ex.Message);
+                rt.PendingEvent = address + ": " + NtpFailureClassifier.Event(ex);
             rt.State = nextState;
             // Detailed local ephemeral port is available on row hover only.
             // It is essential for matching a RAW Npcap frame to the socket.

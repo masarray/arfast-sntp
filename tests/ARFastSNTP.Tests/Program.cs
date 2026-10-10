@@ -459,7 +459,31 @@ Check("genuine UDP socket silence is a typed receive timeout with Tx correlation
     silentFixture.Error is NtpResponseTimeoutException noRx &&
     noRx.LocalEndpoint.StartsWith("127.0.0.1:", StringComparison.Ordinal) &&
     noRx.RemoteEndpoint.StartsWith("127.0.0.1:", StringComparison.Ordinal) &&
-    noRx.RequestTransmitHex.Length == 16);
+    noRx.RequestTransmitHex.Length == 16 &&
+    noRx.IsSelfTarget &&
+    NtpFailureClassifier.State(noRx) == "Local target");
+
+var remoteTimeout = new NtpResponseTimeoutException(
+    new System.Net.IPEndPoint(System.Net.IPAddress.Parse("192.16.1.175"), 54000),
+    new System.Net.IPEndPoint(System.Net.IPAddress.Parse("192.16.1.33"), 123),
+    new byte[8], new TimeoutException());
+Check("remote UDP timeout remains No reply and is not treated as self-target",
+    !remoteTimeout.IsSelfTarget &&
+    NtpFailureClassifier.State(remoteTimeout) == "No reply");
+
+var capturedSelfTarget = new NtpResponseTimeoutException(
+    new System.Net.IPEndPoint(System.Net.IPAddress.Parse("192.16.1.33"), 58642),
+    new System.Net.IPEndPoint(System.Net.IPAddress.Parse("192.16.1.33"), 123),
+    Convert.FromHexString("EE7429C890E71624"), new TimeoutException());
+Check("pcap .33 to .33 request is diagnosed as local target",
+    capturedSelfTarget.IsSelfTarget &&
+    NtpFailureClassifier.State(capturedSelfTarget) == "Local target" &&
+    capturedSelfTarget.Message.Contains("Npcap RAW", StringComparison.Ordinal) &&
+    capturedSelfTarget.RequestTransmitHex == "EE7429C890E71624");
+
+Check("received-but-invalid NTP reply is separately classified",
+    rejectedFixture.Error is not null &&
+    NtpFailureClassifier.State(rejectedFixture.Error) == "Invalid reply");
 
 Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

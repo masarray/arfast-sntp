@@ -241,6 +241,7 @@ public sealed partial class MainWindow : Window
                     "Source conflict" => "Server conflict",
                     "Correcting" => "Correcting time",
                     "No reply" => "No reply",
+                    "Local target" => "Local target",
                     "Invalid reply" => "Invalid reply",
                     "Invalid sample" => "Invalid sample",
                     "Network error" => "Network error",
@@ -249,7 +250,7 @@ public sealed partial class MainWindow : Window
                     _ => "Not synced"
                 };
             SetSync(global, verified);
-            if (snap.State is "Source conflict" or "No reply" or "Invalid reply" or
+            if (snap.State is "Source conflict" or "No reply" or "Local target" or "Invalid reply" or
                 "Invalid sample" or "Network error" or "Rate limited" or "Denied" or
                 "Correction failed")
             {
@@ -258,6 +259,7 @@ public sealed partial class MainWindow : Window
                 {
                     "Source conflict" => "Servers disagree on time. Correction paused.",
                     "No reply" => "No UDP response at Windows socket. Check IP and port 123.",
+                    "Local target" => "NTP server IP is on this PC. RAW Npcap may not loop back to UDP socket.",
                     "Invalid reply" => "UDP reply arrived, but NTP checks rejected it. See row tooltip.",
                     "Invalid sample" => "NTP samples were inconsistent. See row tooltip.",
                     "Network error" => "Windows UDP transport error. See row tooltip.",
