@@ -97,16 +97,22 @@ internal sealed class MultiPeerWorker : BackgroundService
                 {
                     lastHandledNetworkVersion = newest;
                     long nowStamp = Stopwatch.GetTimestamp();
-                    if (_lastNetworkRearmStamp == 0 ||
-                        Stopwatch.GetElapsedTime(_lastNetworkRearmStamp, nowStamp) >=
-                            NetworkRecoveryPolicy.MinimumRearm)
+                    // NetworkChange callbacks can be noisy (virtual NICs,
+                    // interface metrics and transient Windows notifications).
+                    // Do not erase perfectly valid time samples without a
+                    // material observed IPv4 adapter/address/gateway change.
+                    // The low-frequency fallback uses the SAME fingerprint.
+                    bool realAdapterChange = peers.Any(p => p.Enabled) &&
+                        adapterFingerprint.Check();
+                    if (realAdapterChange &&
+                        (_lastNetworkRearmStamp == 0 ||
+                         Stopwatch.GetElapsedTime(_lastNetworkRearmStamp, nowStamp) >=
+                             NetworkRecoveryPolicy.MinimumRearm))
                     {
                         _lastNetworkRearmStamp = nowStamp;
                         _networkRecoveryStamp = nowStamp;
-                        // Never carry an apparently "Synced" status across an
-                        // address/route change. Re-evaluate with fresh NTP data.
                         DiscardSamples(preserveVerification: true);
-                        NoteOnce("Network address/availability changed; rechecking NTP sources.");
+                        NoteOnce("IPv4 adapter/address/gateway changed; rechecking NTP sources.");
                     }
                 }
             }
