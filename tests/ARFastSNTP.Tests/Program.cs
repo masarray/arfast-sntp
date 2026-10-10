@@ -1,5 +1,6 @@
 using ARFastSNTP;
 using System.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 var failures = 0;
 void Check(string label, bool condition)
@@ -540,6 +541,50 @@ var diagnosticsWorstCase = Enumerable.Range(0, 16).Select(_ =>
 string boundedDiagnosticJson = System.Text.Json.JsonSerializer.Serialize(diagnosticsWorstCase);
 Check("16-peer diagnostic journal fits Studio 128 KiB reader guard",
     System.Text.Encoding.UTF8.GetByteCount(boundedDiagnosticJson) <= 131072);
+
+// Exercise the *real* worker with a fully disabled catalog. No UDP traffic,
+// service registration or system-clock mutations are permitted in this test.
+string idleRoot = Path.Combine(Path.GetTempPath(), "arfastsntp-idle-" +
+    Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(idleRoot);
+try
+{
+    string idleStatusPath = Path.Combine(idleRoot, "status.json");
+    using var offState = new SourceControlState(false, _ => { });
+    using var offCatalog = PeerCatalog.Load(
+        Path.Combine(idleRoot, "peers.json"),
+        System.Net.IPAddress.Loopback, offState);
+    using var idleWorker = new MultiPeerWorker(
+        new SyncOptions(System.Net.IPAddress.Loopback, false, 2026, idleStatusPath),
+        offCatalog, NullLogger<MultiPeerWorker>.Instance);
+    await idleWorker.StartAsync(CancellationToken.None);
+    try
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (!File.Exists(idleStatusPath) &&
+            stopwatch.Elapsed < TimeSpan.FromSeconds(3))
+            await Task.Delay(70);
+        bool firstExists = File.Exists(idleStatusPath);
+        string? first = firstExists ? File.ReadAllText(idleStatusPath) : null;
+        Check("real all-off worker produces an initial status file", firstExists &&
+            first is not null && first.Contains("\"State\":\"NTP off\"", StringComparison.Ordinal));
+        await Task.Delay(PollPolicy.IdleHeartbeatInterval + TimeSpan.FromMilliseconds(900));
+        string second = File.ReadAllText(idleStatusPath);
+        using var afterIdle = System.Text.Json.JsonDocument.Parse(second);
+        var root = afterIdle.RootElement;
+        Check("real all-off worker heartbeat refreshes status without UDP probes",
+            first is not null && !string.Equals(first, second, StringComparison.Ordinal) &&
+            root.GetProperty("State").GetString() == "NTP off" &&
+            root.GetProperty("RequestCount").GetInt64() == 0 &&
+            !root.GetProperty("SourceEnabled").GetBoolean());
+    }
+    finally
+    {
+        using var stopDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await idleWorker.StopAsync(stopDeadline.Token);
+    }
+}
+finally { Directory.Delete(idleRoot, recursive: true); }
 
 Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
