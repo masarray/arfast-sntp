@@ -1,4 +1,6 @@
 using ARFastSNTP;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 
 var failures = 0;
 void Check(string label, bool condition)
@@ -40,6 +42,28 @@ Check("clock step during request rejected", ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), TimeSpan.FromMilliseconds(15)));
 Check("normal packet delay accepted", !ClockDiscontinuity.Detected(
     DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddMilliseconds(21), TimeSpan.FromMilliseconds(20)));
+var epoch = new ClockEpochGuard();
+long startStamp = Stopwatch.GetTimestamp();
+DateTimeOffset startUtc = new(2026, 10, 10, 9, 0, 0, TimeSpan.Zero);
+Check("clock epoch initial observation is never a jump",
+    !epoch.Observe(startUtc, startStamp));
+Check("clock epoch accepts normal monotonic passage",
+    !epoch.Observe(startUtc.AddSeconds(2), startStamp + Stopwatch.Frequency * 2));
+Check("clock epoch detects manually advancing Windows by years",
+    epoch.Observe(startUtc.AddYears(3).AddSeconds(3),
+        startStamp + Stopwatch.Frequency * 3));
+Check("clock epoch recovers without repeated false jump",
+    !epoch.Observe(startUtc.AddYears(3).AddSeconds(4),
+        startStamp + Stopwatch.Frequency * 4));
+Check("clock epoch detects manually rewinding the date",
+    epoch.Observe(startUtc.AddSeconds(5), startStamp + Stopwatch.Frequency * 5));
+epoch.Reset(startUtc.AddYears(4), startStamp + Stopwatch.Frequency * 6);
+Check("clock epoch reset suppresses worker-owned step alarm",
+    !epoch.Observe(startUtc.AddYears(4).AddSeconds(1),
+        startStamp + Stopwatch.Frequency * 7));
+Check("all-OFF worker heartbeat precedes Studio's 15s offline watchdog",
+    PollPolicy.IdleHeartbeatInterval > TimeSpan.Zero &&
+    PollPolicy.IdleHeartbeatInterval < TimeSpan.FromSeconds(15));
 using (var gate = new CoalescingGate())
 {
     Check("first refresh enters", await gate.TryEnterAsync(CancellationToken.None));
@@ -517,6 +541,116 @@ var diagnosticsWorstCase = Enumerable.Range(0, 16).Select(_ =>
 string boundedDiagnosticJson = System.Text.Json.JsonSerializer.Serialize(diagnosticsWorstCase);
 Check("16-peer diagnostic journal fits Studio 128 KiB reader guard",
     System.Text.Encoding.UTF8.GetByteCount(boundedDiagnosticJson) <= 131072);
+
+var adapterFingerprint = new NetworkAdapterFingerprint();
+Check("initial IPv4 adapter survey does not trigger spurious reconnection",
+    !adapterFingerprint.Observe("ethernet:down:[]"));
+Check("unchanged IPv4 adapter snapshot is coalesced",
+    !adapterFingerprint.Observe("ethernet:down:[]"));
+Check("Ethernet route change detected with unchanged Wi-Fi",
+    adapterFingerprint.Observe("ethernet:up:192.16.1.175|wifi:up:192.168.1.7"));
+Check("route settling to same signature does not re-trigger",
+    !adapterFingerprint.Observe("ethernet:up:192.16.1.175|wifi:up:192.168.1.7"));
+Check("network wakeup debounce is bounded, no per-event poll loop",
+    NetworkRecoveryPolicy.Debounce >= TimeSpan.FromMilliseconds(250) &&
+    NetworkRecoveryPolicy.Debounce <= TimeSpan.FromSeconds(1) &&
+    NetworkRecoveryPolicy.MinimumRearm >= NetworkRecoveryPolicy.Debounce);
+Check("new network route caps only transport retry",
+    NetworkRecoveryPolicy.TransportBackoff(5, recovering: false) == TimeSpan.FromSeconds(30) &&
+    NetworkRecoveryPolicy.TransportBackoff(5, recovering: true) == TimeSpan.FromSeconds(2));
+Check("RATE pacing increases rather than busy retries",
+    NetworkRecoveryPolicy.RateBackoff(1) == TimeSpan.FromSeconds(60) &&
+    NetworkRecoveryPolicy.RateBackoff(2) == TimeSpan.FromSeconds(120) &&
+    NetworkRecoveryPolicy.RateBackoff(5) >= TimeSpan.FromSeconds(480));
+Check("DENY and RSTR permanently stop polling during worker lifetime",
+    NetworkRecoveryPolicy.IsPermanentDenial("DENY") &&
+    NetworkRecoveryPolicy.IsPermanentDenial("RSTR") &&
+    !NetworkRecoveryPolicy.IsPermanentDenial("RATE"));
+Check("link changes never reset RATE, DENY, RSTR suppression",
+    NetworkRecoveryPolicy.CanRearm(null) &&
+    !NetworkRecoveryPolicy.CanRearm("RATE") &&
+    !NetworkRecoveryPolicy.CanRearm("DENY") &&
+    !NetworkRecoveryPolicy.CanRearm("RSTR"));
+
+// Exercise the *real* worker with a fully disabled catalog. No UDP traffic,
+// service registration or system-clock mutations are permitted in this test.
+string idleRoot = Path.Combine(Path.GetTempPath(), "arfastsntp-idle-" +
+    Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(idleRoot);
+try
+{
+    string idleStatusPath = Path.Combine(idleRoot, "status.json");
+    using var offState = new SourceControlState(false, _ => { });
+    using var offCatalog = PeerCatalog.Load(
+        Path.Combine(idleRoot, "peers.json"),
+        System.Net.IPAddress.Loopback, offState);
+    using var idleWorker = new MultiPeerWorker(
+        new SyncOptions(System.Net.IPAddress.Loopback, false, 2026, idleStatusPath),
+        offCatalog, NullLogger<MultiPeerWorker>.Instance);
+    await idleWorker.StartAsync(CancellationToken.None);
+    try
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (!File.Exists(idleStatusPath) &&
+            stopwatch.Elapsed < TimeSpan.FromSeconds(3))
+            await Task.Delay(70);
+        bool firstExists = File.Exists(idleStatusPath);
+        string? first = firstExists ? File.ReadAllText(idleStatusPath) : null;
+        Check("real all-off worker produces an initial status file", firstExists &&
+            first is not null && first.Contains("\"State\":\"NTP off\"", StringComparison.Ordinal));
+        await Task.Delay(PollPolicy.IdleHeartbeatInterval + TimeSpan.FromMilliseconds(900));
+        string second = File.ReadAllText(idleStatusPath);
+        using var afterIdle = System.Text.Json.JsonDocument.Parse(second);
+        var root = afterIdle.RootElement;
+        Check("real all-off worker heartbeat refreshes status without UDP probes",
+            first is not null && !string.Equals(first, second, StringComparison.Ordinal) &&
+            root.GetProperty("State").GetString() == "NTP off" &&
+            root.GetProperty("RequestCount").GetInt64() == 0 &&
+            !root.GetProperty("SourceEnabled").GetBoolean());
+
+        // An actual IPC-equivalent catalog mutation must wake a worker that
+        // had no active peer. No service restart or UAC and no privileged
+        // SetSystemTime: the entire test is monitor-only.
+        offCatalog.Mutate("enable", "127.0.0.1");
+        stopwatch.Restart();
+        bool awakened = false;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
+        {
+            await Task.Delay(100);
+            if (!ARFastSNTP.Dashboard.DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+                    out var afterEnable, out _) || afterEnable is null)
+                continue;
+            if (afterEnable.RequestCount > 0 && afterEnable.SourceEnabled)
+            {
+                awakened = true;
+                break;
+            }
+        }
+        Check("all-OFF to ON awakens real worker without stale retry delay", awakened);
+        offCatalog.Mutate("disable", "127.0.0.1");
+        stopwatch.Restart();
+        bool returnedIdle = false;
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(7))
+        {
+            await Task.Delay(100);
+            if (!ARFastSNTP.Dashboard.DashboardStatus.TryParse(File.ReadAllText(idleStatusPath),
+                    out var afterDisable, out _) || afterDisable is null)
+                continue;
+            if (afterDisable.State == "NTP off" && !afterDisable.SourceEnabled)
+            {
+                returnedIdle = true;
+                break;
+            }
+        }
+        Check("ON to all-OFF returns to stable idle without worker restart", returnedIdle);
+    }
+    finally
+    {
+        using var stopDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await idleWorker.StopAsync(stopDeadline.Token);
+    }
+}
+finally { Directory.Delete(idleRoot, recursive: true); }
 
 Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
