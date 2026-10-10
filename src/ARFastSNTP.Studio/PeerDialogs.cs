@@ -47,7 +47,7 @@ internal static class PeerDialogChrome
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0)
+            Margin = new Thickness(0, 6, 0, 0)
         };
         footer.Children.Add(cancel);
         footer.Children.Add(confirm);
@@ -58,7 +58,7 @@ internal static class PeerDialogChrome
         new()
         {
             Spacing = spacing,
-            Margin = new Thickness(18, 17, 18, 18)
+            Margin = new Thickness(18, 18, 18, 16)
         };
 }
 
@@ -76,7 +76,9 @@ internal sealed class AddPeerDialog : Window
         var ip = new TextBox
         {
             PlaceholderText = "192.16.1.33",
-            MinHeight = 34,
+            Height = 36,
+            MaxLength = 15,
+            VerticalContentAlignment = VerticalAlignment.Center,
             FontSize = 13
         };
         ip.Classes.Add("ar-input");

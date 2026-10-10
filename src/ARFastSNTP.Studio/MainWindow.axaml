@@ -141,7 +141,8 @@
     </Border>
 
     <StackPanel Grid.Row="2" Spacing="6">
-      <Button Classes="ar" Background="Transparent" BorderThickness="0"
+      <Grid ColumnDefinitions="*,34" ColumnSpacing="4">
+      <Button Grid.Column="0" Classes="ar" Background="Transparent" BorderThickness="0"
               Padding="3,6" HorizontalContentAlignment="Stretch"
               Click="History_OnClick" ToolTip.Tip="Show or hide recent events">
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
@@ -155,6 +156,18 @@
                      Classes="micro" VerticalAlignment="Center"/>
         </Grid>
       </Button>
+      <Button Grid.Column="1" Classes="ar" Width="30" Height="30"
+              Padding="6" Background="Transparent" BorderThickness="0"
+              Click="ExportDiagnostics_OnClick"
+              ToolTip.Tip="Export NTP diagnostics as JSON">
+        <Viewbox Width="17" Height="17">
+          <Path Width="24" Height="24" Stretch="Uniform"
+                Data="M12 3v12m0 0 4-4m-4 4-4-4M4 16v4h16v-4"
+                Stroke="{DynamicResource ArBrush.TextSecondary}" StrokeThickness="1.8"
+                StrokeLineCap="Round" StrokeLineJoin="Round"/>
+        </Viewbox>
+      </Button>
+      </Grid>
       <ScrollViewer x:Name="HistoryScroll" IsVisible="False" MaxHeight="212"
                     VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="HistoryEvents" Margin="12,2,8,8" Spacing="7"/>

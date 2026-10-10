@@ -24,5 +24,18 @@ internal sealed record StatusSnapshot(
     public bool Degraded { get; init; }
     public PeerReading[] Peers { get; init; } = Array.Empty<PeerReading>();
     public string[] RecentCorrections { get; init; } = Array.Empty<string>();
+    public NtpDecisionTrace[] RecentDecisions { get; init; } = Array.Empty<NtpDecisionTrace>();
     internal static string Serialize(StatusSnapshot value) => JsonSerializer.Serialize(value);
 }
+
+ 
+/// <summary>Structured, bounded worker-owned evidence for diagnostic export.</summary>
+internal sealed record NtpDecisionPeer(
+    string Address, bool Enabled, string State, double? OffsetMilliseconds,
+    double? RttMilliseconds, byte? Stratum, double? SampleAgeMilliseconds,
+    int ValidStreak, int Failures, string? LastError);
+
+internal sealed record NtpDecisionTrace(
+    DateTimeOffset CapturedUtc, string State, string? SelectedServer,
+    string Reason, string? StepEvent, NtpDecisionPeer[] Peers,
+    long RequestCount, long AcceptedCount, long RejectedCount);

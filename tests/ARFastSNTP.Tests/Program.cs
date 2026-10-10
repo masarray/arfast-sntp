@@ -485,5 +485,26 @@ Check("received-but-invalid NTP reply is separately classified",
     rejectedFixture.Error is not null &&
     NtpFailureClassifier.State(rejectedFixture.Error) == "Invalid reply");
 
+// An initial single verified sample is not a server conflict.
+var notYetTrusted = PeerElection.Choose(new[] { c1 }, null, false);
+Check("first responding source is verifying, not conflicting",
+    PeerStatusClassifier.Pending(1, notYetTrusted, Array.Empty<string>()) == "Verifying");
+Check("two disagreeing sources show conflict",
+    PeerStatusClassifier.Pending(2, PeerElection.Choose(new[] { c1, bad }, null, false),
+        Array.Empty<string>()) == "Source conflict");
+Check("no validated samples with rate limited peer is distinguishable",
+    PeerStatusClassifier.Pending(0,
+        PeerElection.Choose(Array.Empty<PeerElection.Candidate>(), null, false),
+        new[] { "Rate limited" }) == "Rate limited");
+var diag = new NtpDecisionTrace(DateTimeOffset.UtcNow, "Verifying", null,
+    "Single responding source; consensus unavailable", null,
+    new[] { new NtpDecisionPeer(c1.Address, true, "Online", 2, 8, 3, 100, 1, 0, null) },
+    4, 3, 1);
+using var diagJson = System.Text.Json.JsonDocument.Parse(StatusSnapshot.Serialize(
+    snapshotMulti with { RecentDecisions = new[] { diag } }));
+Check("worker snapshot contains structured bounded decision evidence",
+    diagJson.RootElement.GetProperty("RecentDecisions")[0]
+        .GetProperty("Peers")[0].GetProperty("Address").GetString() == c1.Address);
+
 Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;

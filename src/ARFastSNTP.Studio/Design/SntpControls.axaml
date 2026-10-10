@@ -85,8 +85,9 @@
     <Setter Property="Opacity" Value="0.85" />
   </Style>
   <Style Selector="TextBox.ar-input">
-    <Setter Property="Height" Value="{DynamicResource ArControl.SM}" />
-    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="Height" Value="{DynamicResource ArControl.MD}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="11,0" />
     <Setter Property="Background" Value="{DynamicResource ArBrush.Surface2}" />
     <Setter Property="BorderBrush" Value="{DynamicResource ArBrush.Stroke}" />
     <Setter Property="BorderThickness" Value="1" />

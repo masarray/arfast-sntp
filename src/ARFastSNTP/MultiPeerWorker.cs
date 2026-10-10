@@ -31,6 +31,9 @@ internal sealed class MultiPeerWorker : BackgroundService
     private readonly ILogger<MultiPeerWorker> _logger;
     private readonly Dictionary<string, PeerRuntime> _runtime = new(StringComparer.Ordinal);
     private readonly Queue<string> _history = new();
+    private readonly Queue<NtpDecisionTrace> _diagnostics = new();
+    private string? _lastDecisionKey;
+    private long _lastDecisionStamp;
     private readonly string _statusPath;
     private string? _selected;
     private long _requests, _accepted, _rejected, _lastStepStamp, _lastLogStamp;
@@ -127,15 +130,8 @@ internal sealed class MultiPeerWorker : BackgroundService
             // Network silence, Windows socket errors and NTP validation
             // failures are different evidence. Preserve the distinction.
             var failedStates = enabled.Select(p => _runtime[p.Address].State).ToArray();
-            string overallState = chosen is not null ? "Verifying"
-                : eligible.Length != 0 ? "Source conflict"
-                : failedStates.Contains("Local target") ? "Local target"
-                : failedStates.Contains("Invalid reply") ? "Invalid reply"
-                : failedStates.Contains("Denied") ? "Denied"
-                : failedStates.Contains("Rate limited") ? "Rate limited"
-                : failedStates.Contains("Network error") ? "Network error"
-                : failedStates.Contains("Invalid sample") ? "Invalid sample"
-                : "No reply";
+            string overallState = PeerStatusClassifier.Pending(
+                eligible.Length, decision, failedStates);
             string? evt = null;
             SntpSample? primary = chosen is not null ? _runtime[chosen].Sample : null;
             if (chosen is not null && primary.HasValue)
@@ -194,8 +190,9 @@ internal sealed class MultiPeerWorker : BackgroundService
             if (chosen is null && eligible.Length > 1)
                 NoteOnce("NTP sources disagree; Windows correction held.");
 
+            TraceDecision(peers, overallState, chosen, decision.Reason, evt);
             Publish(peers, overallState, primary, evt ?? decision.Reason,
-                decision.Degraded && enabled.Length > 1);
+                decision.Degraded);
             // Responsive control mutations, but polling cadence remains bounded.
             try
             {
@@ -318,7 +315,8 @@ internal sealed class MultiPeerWorker : BackgroundService
             SourceEnabled = peers.Any(p => p.Enabled),
             StepEnabled = _options.AllowStep,
             LastCorrectionUtc = _lastCorrection,
-            RecentCorrections = _history.ToArray()
+            RecentCorrections = _history.ToArray(),
+            RecentDecisions = _diagnostics.ToArray()
         };
         try
         {
@@ -339,6 +337,42 @@ internal sealed class MultiPeerWorker : BackgroundService
             _logger.LogInformation("NTP {State}; source={Source}; peers={Count}",
                 state, winner?.Address ?? "none", peers.Length);
         }
+    }
+
+    /// <summary>
+    /// Bounded forensic journal, separate from calm operator history. Capture
+    /// transitions immediately; repeat unchanged states at most every 30 sec.
+    /// All mutations run on the single supervisor after completed probes.
+    /// </summary>
+    private void TraceDecision(NtpPeer[] peers, string state, string? selected,
+        string reason, string? stepEvent)
+    {
+        string key = state + "|" + selected + "|" + reason + "|" +
+            string.Join(",", peers.Where(p => p.Enabled).Select(p =>
+                p.Address + ":" + _runtime[p.Address].State));
+        if (stepEvent is not null) key += "|" + stepEvent;
+        long now = Stopwatch.GetTimestamp();
+        if (key == _lastDecisionKey && _lastDecisionStamp != 0 &&
+            Stopwatch.GetElapsedTime(_lastDecisionStamp) < TimeSpan.FromSeconds(30))
+            return;
+        _lastDecisionKey = key;
+        _lastDecisionStamp = now;
+        var samples = peers.Select(peer =>
+        {
+            var rt = _runtime[peer.Address];
+            double? ageMs = rt.Sample.HasValue && rt.SeenAt > 0
+                ? Math.Round(Stopwatch.GetElapsedTime(rt.SeenAt).TotalMilliseconds, 1)
+                : null;
+            return new NtpDecisionPeer(peer.Address, peer.Enabled, rt.State,
+                rt.Sample?.Offset.TotalMilliseconds, rt.Sample?.RttMs,
+                rt.Sample?.Stratum, ageMs, rt.Streak, rt.Failures,
+                rt.Error is null ? null : rt.Error[..Math.Min(256, rt.Error.Length)]);
+        }).ToArray();
+        if (_diagnostics.Count == 32) _diagnostics.Dequeue();
+        _diagnostics.Enqueue(new NtpDecisionTrace(DateTimeOffset.UtcNow,
+            state, selected, reason, stepEvent, samples,
+            Interlocked.Read(ref _requests), Interlocked.Read(ref _accepted),
+            Interlocked.Read(ref _rejected)));
     }
 
     private void Note(string evt)

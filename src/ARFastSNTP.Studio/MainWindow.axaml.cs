@@ -2,7 +2,9 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Text;
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -294,10 +296,6 @@ public sealed partial class MainWindow : Window
         var events = (snap.RecentCorrections ?? Array.Empty<string>())
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .TakeLast(16).Reverse().ToList();
-        if (!string.IsNullOrWhiteSpace(snap.LastEvent) &&
-            !events.Any(e => e.Contains(snap.LastEvent, StringComparison.Ordinal)))
-            events.Insert(0, snap.LastEvent);
-        if (events.Count > 16) events.RemoveAt(events.Count - 1);
         string key = string.Join("\n", events);
         if (_lastEvents == key) return;
         _lastEvents = key;
@@ -380,6 +378,48 @@ public sealed partial class MainWindow : Window
         {
             _editing = false;
             if (!_closed) RefreshButtons();
+        }
+    }
+
+    private async void ExportDiagnostics_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_closed) return;
+        try
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "Save NTP diagnostics",
+                SuggestedFileName = "ARFastSNTP-Diagnostics-" +
+                    DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".json",
+                DefaultExtension = "json",
+                FileTypeChoices = new[]
+                {
+                    new FilePickerFileType("JSON diagnostics") { Patterns = new[] { "*.json" } }
+                },
+                ShowOverwritePrompt = true
+            });
+            if (file is null || _closed) return;
+            // Persist the authoritative bounded service snapshot verbatim.
+            // Never export per-user secrets, registry keys or unrelated logs.
+            var info = new FileInfo(_statusPath);
+            if (!info.Exists || info.Length is <= 0 or > 131072)
+                throw new InvalidDataException("Service diagnostics are not available.");
+            string json = await File.ReadAllTextAsync(_statusPath, _closedToken.Token);
+            if (json.Length == 0 || !DashboardStatus.TryParse(json, out _, out _))
+                throw new InvalidDataException("Service diagnostics are not valid.");
+            await using var stream = await file.OpenWriteAsync();
+            await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            await writer.WriteAsync(json.AsMemory(), _closedToken.Token);
+        }
+        catch (OperationCanceledException) when (_closed) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+            InvalidDataException or InvalidOperationException)
+        {
+            if (!_closed)
+            {
+                _hint.IsVisible = true;
+                Set(_hint, "Could not save diagnostics. Check the location and try again.");
+            }
         }
     }
 
