@@ -1,0 +1,108 @@
+name: Publish verified Windows release
+# Stable Windows releases are tied to a successful post-merge CI run
+# of the exact CURRENT main commit; PR builds and stale CI are rejected.
+on:
+  workflow_run:
+    workflows: ["Windows CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: arfast-sntp-stable-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ github.repository == 'masarray/arfast-sntp' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+      CI_SHA: ${{ github.event.workflow_run.head_sha }}
+      REPO: masarray/arfast-sntp
+      INSTALLER: ARFastSNTP-Setup-Windows-x64.exe
+      ARTIFACT: ARFastSNTP-Inno-Windows-x64
+    steps:
+      - name: Fetch exact verified main revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Verify published version and exact successful CI source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "$REPO" ]] || exit 1
+          main_sha="$(gh api "repos/$REPO/branches/main" --jq '.commit.sha')"
+          [[ "$CI_SHA" == "$main_sha" ]] || { echo 'Main advanced; refusing to publish stale CI'; exit 1; }
+          run_sha="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID" --jq '.head_sha')"
+          run_status="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID" --jq '.conclusion')"
+          run_event="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID" --jq '.event')"
+          [[ "$run_sha" == "$CI_SHA" && "$run_status" == 'success' && "$run_event" == 'push' ]] ||
+            { echo 'Unverified workflow run provenance'; exit 1; }
+          version="$(sed -n 's/^AppVersion=\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' installer/ARFastSNTP.iss)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid Inno version'; exit 1; }
+          grep -Fq "<Version>$version</Version>" Directory.Build.props
+          grep -Fq "<FileVersion>$version.0</FileVersion>" Directory.Build.props
+          test -s "docs/RELEASE-NOTES-$version.md"
+          grep -Fq 'releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe' README.md
+          grep -Fq 'releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe' download.html
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
+          echo "Verified current main $CI_SHA for v$version."
+
+      - name: Refuse mutable/partial pre-existing release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$REPO" >/dev/null 2>&1; then
+            # A release already published with this version is immutable.
+            existing="$(gh release view "$RELEASE_TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+            grep -Fxq "$INSTALLER" <<< "$existing"
+            grep -Fxq "$INSTALLER.sha256" <<< "$existing"
+            echo 'Release already exists with both assets; refusing to replace its binary.'
+            echo "RELEASE_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_EXISTS=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate and extract single installer from CI artifact
+        if: env.RELEASE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          id_list="$(gh api "repos/$REPO/actions/runs/$CI_RUN_ID/artifacts" --jq '.artifacts[] | select(.name == "ARFastSNTP-Inno-Windows-x64" and .expired == false) | .id')"
+          [[ "$id_list" =~ ^[0-9]+$ ]] || { echo 'Expected exactly one unexpired Inno CI artifact'; exit 1; }
+          mkdir -p downloaded release-assets
+          gh run download "$CI_RUN_ID" --repo "$REPO" --name "$ARTIFACT" --dir downloaded
+          mapfile -t exes < <(find downloaded -type f -name "$INSTALLER")
+          [[ "${#exes[@]}" == 1 ]] || { echo "Expected exactly one $INSTALLER"; exit 1; }
+          exe="${exes[0]}"
+          [[ "$(stat -c '%s' "$exe")" -gt 10000000 ]] ||
+            { echo 'Downloaded installer is unexpectedly small'; exit 1; }
+          [[ "$(od -An -tx1 -N2 "$exe" | tr -d ' \n')" == '4d5a' ]] ||
+            { echo 'Downloaded asset is not a Windows PE .exe'; exit 1; }
+          cp "$exe" "release-assets/$INSTALLER"
+          ( cd release-assets && sha256sum "$INSTALLER" > "$INSTALLER.sha256" )
+          cat "release-assets/$INSTALLER.sha256"
+
+      - name: Publish verified single-EXE Windows release and checksum
+        if: env.RELEASE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            "release-assets/$INSTALLER" "release-assets/$INSTALLER.sha256" \
+            --repo "$REPO" --target "$CI_SHA" \
+            --title "AR Fast SNTP $RELEASE_TAG — Windows x64" \
+            --notes-file "docs/RELEASE-NOTES-$RELEASE_VERSION.md" \
+            --latest
+          actual="$(gh release view "$RELEASE_TAG" --repo "$REPO" --json assets --jq '.assets[].name')"
+          grep -Fxq "$INSTALLER" <<< "$actual"
+          grep -Fxq "$INSTALLER.sha256" <<< "$actual"
+          gh release view "$RELEASE_TAG" --repo "$REPO" --json url,tagName,isPrerelease,assets

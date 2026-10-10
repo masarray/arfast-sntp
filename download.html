@@ -4,25 +4,25 @@
 <meta name="description" content="Download AR Fast SNTP for Windows x64, verify the SHA-256 checksum, and see installation precautions.">
 <title>Download — AR Fast SNTP</title><link rel="icon" href="assets/favicon/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png"><link rel="apple-touch-icon" href="assets/favicon/apple-touch-icon.png">
-<link rel="manifest" href="assets/favicon/site.webmanifest"><link rel="stylesheet" href="site.css"></head><body>
+<link rel="manifest" href="assets/favicon/site.webmanifest"><link rel="stylesheet" href="site.css"><script defer src="release.js"></script></head><body>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="./"><img src="assets/favicon/android-chrome-192x192.png" width="30" height="30" alt="">AR Fast SNTP</a>
 <nav class="nav" aria-label="Main"><a href="./">Overview</a><a href="https://github.com/masarray/arfast-sntp#readme">Documentation</a><a href="download.html" aria-current="page" class="nav-download">Download</a></nav></div></header>
 <main class="shell">
-<div class="page-heading"><p class="eyebrow">Public testing preview</p><h1>Download <span>AR Fast SNTP.</span></h1><p class="lead">Official Windows installer from GitHub Releases, with a SHA-256 file for integrity checks. No mirrors, ad-supported downloaders or third-party installers.</p></div>
+<div class="page-heading"><p class="eyebrow">Official Windows x64 release</p><h1>Download <span>AR Fast SNTP.</span></h1><p class="lead">Official Windows installer from GitHub Releases, with a SHA-256 file for integrity checks. No mirrors, ad-supported downloaders or third-party installers.</p></div>
 <div class="download-grid"><section class="download-panel" aria-labelledby="release">
-<div class="release-meta"><span class="pill">Preview · not stable</span><span>v0.10.1 Preview 1</span><span>Windows x64</span></div>
+<div class="release-meta"><span class="pill">Public release</span><span data-release-version>Latest version</span><span>Windows x64</span></div>
 <h2 id="release">AR Fast SNTP Installer</h2><p>One Inno Setup package including Avalonia Studio and the Windows background service. The setup executable is unsigned and requires administrator approval to install the service.</p>
-<a class="btn primary" href="https://github.com/masarray/arfast-sntp/releases/download/v0.10.1-preview.1/ARFastSNTP-Setup-Windows-x64.exe" download>Download for Windows x64 <span aria-hidden="true">↓</span></a>
-<a class="btn secondary" href="https://github.com/masarray/arfast-sntp/releases/tag/v0.10.1-preview.1">View release notes</a>
-<div class="checksums"><h3>Verify before running</h3><p>Download the <a href="https://github.com/masarray/arfast-sntp/releases/download/v0.10.1-preview.1/ARFastSNTP-Setup-Windows-x64.exe.sha256">SHA-256 checksum file</a>, then compare its digest with:</p>
+<a class="btn primary" href="https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe" data-release-asset="installer">Download for Windows x64 <span aria-hidden="true">↓</span></a>
+<a class="btn secondary" href="https://github.com/masarray/arfast-sntp/releases/latest" data-release-notes>View release notes</a>
+<div class="checksums"><h3>Verify before running</h3><p>Download the <a href="https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe.sha256" data-release-asset="checksum">SHA-256 checksum file</a>, then compare its digest with:</p>
 <pre><code>Get-FileHash .\ARFastSNTP-Setup-Windows-x64.exe -Algorithm SHA256</code></pre>
-<p class="micro">Use <a href="https://github.com/masarray/arfast-sntp/releases">all releases</a> for version history. Binary provenance: Windows CI #49, verified build commit <code>ef23e4ef</code>.</p>
+<p class="micro">Use <a href="https://github.com/masarray/arfast-sntp/releases">all releases</a> for version history. Each GitHub Release records its verified source commit, installer, and checksum. <span data-release-size></span></p>
 </div></section>
 <aside class="info-panel"><h2>Before installing</h2>
 <ul><li><strong>Test PC only.</strong> No live SCADA, SOE or historian deployments.</li>
 <li>Provide a reachable IPv4 unicast NTP server on UDP port 123.</li>
 <li><strong>Clock correction is enabled by normal setup.</strong> For monitor-only testing, launch with <code>/LABSYNC=0</code>.</li>
-<li>SmartScreen may warn about this unsigned preview. Check the GitHub source and SHA-256; don't disable security software broadly.</li>
+<li>SmartScreen may warn about this unsigned release. Check the GitHub source and SHA-256; never disable security protections solely to install.</li>
 <li>To uninstall, use Windows Settings → Installed apps → AR Fast SNTP.</li>
 </ul><p>Found a problem? Open a <a href="https://github.com/masarray/arfast-sntp/issues">GitHub issue</a> with redacted diagnostics and environment details.</p>
 </aside></div></main>

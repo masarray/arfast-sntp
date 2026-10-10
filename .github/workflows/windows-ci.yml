@@ -124,6 +124,29 @@ jobs:
           if ($manifest.name -ne 'AR Fast SNTP' -or @($manifest.icons).Count -lt 2) {
             throw 'Web manifest still contains placeholder branding'
           }
+          # Validate one installer version and links to the newest GitHub Release.
+          $iss = Get-Content 'installer/ARFastSNTP.iss' -Raw
+          $props = Get-Content 'Directory.Build.props' -Raw
+          $versionMatch = [regex]::Match($iss, '(?m)^AppVersion=(\d+\.\d+\.\d+)\s*$')
+          if (-not $versionMatch.Success) { throw 'Invalid Inno AppVersion' }
+          $version = $versionMatch.Groups[1].Value
+          if (-not $props.Contains("<Version>$version</Version>") -or
+              -not $props.Contains("<FileVersion>$version.0</FileVersion>")) {
+            throw 'Windows executable version differs from Inno version'
+          }
+          if (-not (Test-Path "docs/RELEASE-NOTES-$version.md")) {
+            throw 'Release notes must match the Inno version'
+          }
+          $latest = 'releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe'
+          $readme = Get-Content 'README.md' -Raw
+          $downloadPage = Get-Content 'download.html' -Raw
+          if (-not $readme.Contains($latest) -or
+              -not $downloadPage.Contains($latest) -or
+              -not $downloadPage.Contains($latest + '.sha256') -or
+              -not (Test-Path 'release.js')) {
+            throw 'Public site and documentation lost the permanent download link'
+          }
+          Write-Host "Installer, .NET version, release notes and download links agree on $version."
           Write-Host 'Canonical Windows, Studio, Inno and landing brand assets verified.'
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
           foreach ($path in @(
