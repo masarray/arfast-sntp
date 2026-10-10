@@ -30,6 +30,8 @@ AR Fast SNTP combines a calm, compact **Avalonia Studio** with **one persistent 
 
 **[Download latest Windows x64 installer (.exe)](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe)**
 
+**v0.10.3 update:** Faster validated SNTP confirmation and removal of unnecessary scheduler waiting; avoids discarding good NTP samples on irrelevant Windows network notifications. In user testing on a Windows lab PC, correction was observed around one second and LAN reconnection recovery around six seconds. These are observed results, **not guaranteed timings** across network environments. [Release history](https://github.com/masarray/arfast-sntp/releases).
+
 [Download page](https://masarray.github.io/arfast-sntp/download.html) · [Latest release notes](https://github.com/masarray/arfast-sntp/releases/latest) · [SHA-256 file](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe.sha256)
 
 The single Inno Setup executable contains Avalonia Studio, the Windows Service and setup helper—there is **no separately installed runtime or ZIP to assemble**. The same stable installer filename is used in every stable GitHub Release so website and README links automatically resolve to the newest release. Do not download unofficial mirrors.
