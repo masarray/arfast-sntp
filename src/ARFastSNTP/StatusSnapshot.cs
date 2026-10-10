@@ -24,7 +24,6 @@ internal sealed record StatusSnapshot(
     public bool Degraded { get; init; }
     public PeerReading[] Peers { get; init; } = Array.Empty<PeerReading>();
     public string[] RecentCorrections { get; init; } = Array.Empty<string>();
-    public NtpDecisionTrace[] RecentDecisions { get; init; } = Array.Empty<NtpDecisionTrace>();
     internal static string Serialize(StatusSnapshot value) => JsonSerializer.Serialize(value);
 }
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -35,6 +36,7 @@ internal sealed class MultiPeerWorker : BackgroundService
     private string? _lastDecisionKey;
     private long _lastDecisionStamp;
     private readonly string _statusPath;
+    private readonly string _diagnosticPath;
     private string? _selected;
     private long _requests, _accepted, _rejected, _lastStepStamp, _lastLogStamp;
     private DateTimeOffset? _lastCorrection;
@@ -48,6 +50,7 @@ internal sealed class MultiPeerWorker : BackgroundService
         _catalog = catalog;
         _logger = logger;
         _statusPath = options.StatusPath;
+        _diagnosticPath = Path.ChangeExtension(_statusPath, ".diagnostics.json");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -315,8 +318,7 @@ internal sealed class MultiPeerWorker : BackgroundService
             SourceEnabled = peers.Any(p => p.Enabled),
             StepEnabled = _options.AllowStep,
             LastCorrectionUtc = _lastCorrection,
-            RecentCorrections = _history.ToArray(),
-            RecentDecisions = _diagnostics.ToArray()
+            RecentCorrections = _history.ToArray()
         };
         try
         {
@@ -373,6 +375,21 @@ internal sealed class MultiPeerWorker : BackgroundService
             state, selected, reason, stepEvent, samples,
             Interlocked.Read(ref _requests), Interlocked.Read(ref _accepted),
             Interlocked.Read(ref _rejected)));
+        // Unlike the small live status, this bounded journal is persisted
+        // only on meaningful state changes or a 30s heartbeat.
+        try
+        {
+            string? directory = Path.GetDirectoryName(_diagnosticPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            string temporary = _diagnosticPath + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(_diagnostics.ToArray()),
+                new UTF8Encoding(false));
+            File.Move(temporary, _diagnosticPath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Could not publish bounded NTP diagnostic journal.");
+        }
     }
 
     private void Note(string evt)

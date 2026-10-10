@@ -500,19 +500,22 @@ var diag = new NtpDecisionTrace(DateTimeOffset.UtcNow, "Verifying", null,
     "Single responding source; consensus unavailable", null,
     new[] { new NtpDecisionPeer(c1.Address, true, "Online", 2, 8, 3, 100, 1, 0, null) },
     4, 3, 1);
-using var diagJson = System.Text.Json.JsonDocument.Parse(StatusSnapshot.Serialize(
-    snapshotMulti with { RecentDecisions = new[] { diag } }));
-Check("worker snapshot contains structured bounded decision evidence",
-    diagJson.RootElement.GetProperty("RecentDecisions")[0]
+using var diagJson = System.Text.Json.JsonDocument.Parse(
+    System.Text.Json.JsonSerializer.Serialize(new[] { diag }));
+Check("service journal serializes independent bounded decision evidence",
+    diagJson.RootElement[0]
         .GetProperty("Peers")[0].GetProperty("Address").GetString() == c1.Address);
+using var statusOnly = System.Text.Json.JsonDocument.Parse(
+    StatusSnapshot.Serialize(snapshotMulti));
+Check("live status avoids rewriting forensic journal on every poll",
+    !statusOnly.RootElement.TryGetProperty("RecentDecisions", out _));
 // Maximum history / peer counts must fit the Studio's 128-KiB file guard.
 var diagnosticsWorstCase = Enumerable.Range(0, 16).Select(_ =>
     diag with { Peers = Enumerable.Range(1, 16).Select(n =>
         new NtpDecisionPeer("192.16.1." + n, true, "No reply",
             null, null, null, null, 0, 5, new string('E', 128))).ToArray() }).ToArray();
-string boundedDiagnosticJson = StatusSnapshot.Serialize(
-    snapshotMulti with { RecentDecisions = diagnosticsWorstCase });
-Check("16-peer diagnostic history fits Studio 128 KiB reader guard",
+string boundedDiagnosticJson = System.Text.Json.JsonSerializer.Serialize(diagnosticsWorstCase);
+Check("16-peer diagnostic journal fits Studio 128 KiB reader guard",
     System.Text.Encoding.UTF8.GetByteCount(boundedDiagnosticJson) <= 131072);
 
 Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");

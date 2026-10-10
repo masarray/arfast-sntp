@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Interactivity;
@@ -40,6 +41,10 @@ public sealed partial class MainWindow : Window
     private readonly string _statusPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "ARFastSNTP", "status.json");
+
+    private readonly string _diagnosticPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "ARFastSNTP", "status.diagnostics.json");
 
     private NtpPeer[] _config = Array.Empty<NtpPeer>();
     private bool _catalogReady;
@@ -407,13 +412,33 @@ public sealed partial class MainWindow : Window
             string json = await File.ReadAllTextAsync(_statusPath, _closedToken.Token);
             if (json.Length == 0 || !DashboardStatus.TryParse(json, out _, out _))
                 throw new InvalidDataException("Service diagnostics are not valid.");
+            string decisionJournal = "[]";
+            var journalInfo = new FileInfo(_diagnosticPath);
+            if (journalInfo.Exists)
+            {
+                if (journalInfo.Length is <= 0 or > 131072)
+                    throw new InvalidDataException("The diagnostic journal is invalid or too large.");
+                decisionJournal = await File.ReadAllTextAsync(
+                    _diagnosticPath, _closedToken.Token);
+            }
+            using var statusDoc = JsonDocument.Parse(json);
+            using var decisionsDoc = JsonDocument.Parse(decisionJournal);
+            if (decisionsDoc.RootElement.ValueKind != JsonValueKind.Array)
+                throw new InvalidDataException("The diagnostic journal format is invalid.");
+            string exported = JsonSerializer.Serialize(new
+            {
+                FormatVersion = 1,
+                ExportedUtc = DateTimeOffset.UtcNow,
+                LiveStatus = statusDoc.RootElement,
+                DecisionHistory = decisionsDoc.RootElement
+            }, new JsonSerializerOptions { WriteIndented = true });
             await using var stream = await file.OpenWriteAsync();
             await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            await writer.WriteAsync(json.AsMemory(), _closedToken.Token);
+            await writer.WriteAsync(exported.AsMemory(), _closedToken.Token);
         }
         catch (OperationCanceledException) when (_closed) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
-            InvalidDataException or InvalidOperationException)
+            InvalidDataException or InvalidOperationException or JsonException)
         {
             if (!_closed)
             {
