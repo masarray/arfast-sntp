@@ -24,8 +24,6 @@ namespace ARFastSNTP.Studio;
 public sealed partial class MainWindow : Window
 {
     public ObservableCollection<PeerRowModel> Rows { get; } = new();
-    private readonly Grid _mainLayout;
-    private readonly Grid _historyPanel;
     private readonly TextBlock _pcClock;
     private readonly TextBlock _pcDate;
     private readonly TextBlock _syncState;
@@ -66,8 +64,6 @@ public sealed partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         DataContext = this;
-        _mainLayout = Require<Grid>("MainLayout");
-        _historyPanel = Require<Grid>("HistoryPanel");
         _pcClock = Require<TextBlock>("PcClock");
         _pcDate = Require<TextBlock>("PcDate");
         _syncState = Require<TextBlock>("SyncState");
@@ -489,14 +485,9 @@ public sealed partial class MainWindow : Window
     private void History_OnClick(object? sender, RoutedEventArgs e)
     {
         _historyOpen = !_historyOpen;
-
-        // A single bounded allocation policy in *both* normal and maximized
-        // windows. No Height/MinHeight/MaxHeight changes: those caused the
-        // old layout to compress Auto rows and paint history over the table.
-        _mainLayout.RowDefinitions = new RowDefinitions(
-            _historyOpen ? "32,3*,2*" : "32,*,Auto");
-        _historyPanel.RowDefinitions = new RowDefinitions(
-            _historyOpen ? "32,*" : "32,0");
+        // No resize calculations, row reallocations or native window mutations.
+        // Collapsed content measures as zero; expanded content measures itself
+        // up to the bounded history viewport, leaving the NTP table intact.
         _historyScroll.IsVisible = _historyOpen;
         _chevron.Data = Geometry.Parse(_historyOpen ? ChevronUp : ChevronDown);
     }

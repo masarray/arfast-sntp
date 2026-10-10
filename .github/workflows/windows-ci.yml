@@ -109,9 +109,12 @@ jobs:
               -not $xaml.Contains('x:Name="HistoryPanel"') -or
               -not $xaml.Contains('RowDefinitions="32,44,*,Auto"') -or
               -not $xaml.Contains('MinHeight="380"') -or
-              -not $xaml.Contains('MaxWidth="1120" HorizontalAlignment="Center"') -or
+              -not $xaml.Contains('MaxWidth="1440" HorizontalAlignment="Stretch"') -or
+              -not $xaml.Contains('RowDefinitions="32,*,Auto"') -or
+              -not $xaml.Contains('x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto"') -or
+              -not $xaml.Contains('MaxHeight="172" MinHeight="0"') -or
               $xaml.Contains('MaxHeight="830"')) {
-            throw 'Multi-peer Explorer or safe bounded table/history layout is missing'
+            throw 'Multi-peer Explorer or auto-sized bounded history layout is missing'
           }
           if ($xaml.Contains('x:Name="SourceToggle"') -or
               $xaml.Contains('Content="+ Add server"')) {
@@ -144,17 +147,18 @@ jobs:
           if (-not $history.Contains('EventDisplay.Format') -or
               -not $history.Contains('Grid.SetColumn(description, 1)') -or
               -not $history.Contains('History_OnClick') -or
-              -not $history.Contains('"32,3*,2*" : "32,*,Auto"') -or
-              -not $history.Contains('"32,*" : "32,0"') -or
-              $history.Contains('ApplyWindowLayout()')) {
-            throw 'History must retain star-allocated, non-overlapping states'
+              -not $history.Contains('_historyScroll.IsVisible = _historyOpen') -or
+              $history.Contains('ApplyWindowLayout()') -or
+              $history.Contains('RowDefinitions = new RowDefinitions')) {
+            throw 'History must toggle visibility without reallocating grid rows'
           }
           # Native resizing must never be driven from a History click or
           # timer/catalog refresh; Windows controls restored/maximized bounds.
           $toggle = $history.Substring($history.IndexOf('private void History_OnClick'))
           if ($toggle -match '\b(?:Height|MinHeight|MaxHeight)\s*=' -or
-              $toggle.Contains('SizeToContent')) {
-            throw 'History toggle must never mutate the native window bounds'
+              $toggle.Contains('SizeToContent') -or
+              $toggle.Contains('RowDefinitions')) {
+            throw 'History toggle must never mutate bounds or row geometry'
           }
           $ntp = Get-Content 'src/ARFastSNTP/NtpProtocol.cs' -Raw
           if (-not $ntp.Contains('NtpResponseTimeoutException')) {

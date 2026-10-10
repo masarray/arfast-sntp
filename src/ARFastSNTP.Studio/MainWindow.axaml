@@ -2,13 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="ARFastSNTP.Studio.MainWindow"
         Title="AR Fast SNTP"
-        Width="925" Height="510" MinWidth="855" MinHeight="380"
+        Width="925" Height="570" MinWidth="855" MinHeight="380"
         SizeToContent="Manual"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ArBrush.Canvas}"
         FontFamily="{DynamicResource ArFont.Inter}">
   <Grid x:Name="MainLayout" Margin="16,9,16,12"
-        MaxWidth="1120" HorizontalAlignment="Center"
+        MaxWidth="1440" HorizontalAlignment="Stretch"
         RowDefinitions="32,*,Auto" RowSpacing="9" ClipToBounds="True">
 
     <!-- PC is deliberately secondary; this line replaces the old hero cards. -->
@@ -152,7 +152,7 @@
       </Grid>
     </Border>
 
-    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,0" RowSpacing="0"
+    <Grid x:Name="HistoryPanel" Grid.Row="2" RowDefinitions="32,Auto" RowSpacing="0"
           ClipToBounds="True">
       <Grid Grid.Row="0" ColumnDefinitions="*,34" ColumnSpacing="4">
       <Button Grid.Column="0" Classes="ar" Background="Transparent" BorderThickness="0"
@@ -182,6 +182,7 @@
       </Button>
       </Grid>
       <ScrollViewer x:Name="HistoryScroll" Grid.Row="1" IsVisible="False"
+                    MaxHeight="172" MinHeight="0"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto" ClipToBounds="True">
         <StackPanel x:Name="HistoryEvents" Margin="12,2,8,8" Spacing="7"/>
