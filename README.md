@@ -1,113 +1,44 @@
+<img src="assets/favicon/android-chrome-192x192.png" alt="AR Fast SNTP" width="64" height="64">
+
 # AR Fast SNTP
 
-> **Continuation checkpoint (2026-10-10):** Read [HANDOFF.md](HANDOFF.md) before editing. It contains the verified v0.10.1/CI #31 baseline, unresolved ARSAS RAW/Npcap UDP receive problem, GUI acceptance criteria, source map and next-thread plan. Keep PR #1 Draft until isolated Windows field testing passes.
+**Windows x64 · Avalonia Studio · Windows Service · GPL-2.0-or-later**
 
-**Windows x64 · GPL-2.0-or-later · Avalonia Studio**
+AR Fast SNTP is a compact Windows SNTP (Simple Network Time Protocol) client for monitoring and, when explicitly configured, synchronizing the clock on **authorized test and commissioning PCs**. It supports up to **16 IPv4 NTP sources**, bounded probing, conservative source selection, and one background Windows Service that continues when Studio closes.
 
-AR Fast SNTP is a Windows NTP client and monitor for **authorized isolated
-certification/test PCs**. It runs one Windows Service that can monitor up to
-16 NTP IPv4 servers, select a coherent time reference, and (when explicitly
-installed in synchronization mode) correct the Windows clock.
+> **Pre-release:** Real tests validated public NTP replies and a small Windows clock correction. Independent-source failover, large-step recovery, unattended upgrade/rollback and visual DPI acceptance are **not yet certified**. Do not use on production SCADA/SOE/historian machines.
 
-**This is not yet suitable for live SCADA/SOE/historian hosts.** SNTP is
-unauthenticated; use a trusted isolated GPS/NTP network. Real-device
-failover, accuracy and installer acceptance are still required.
+[Product landing page](index.html) · [Windows CI test builds](https://github.com/masarray/arintp/actions) · [Multi-NTP architecture](docs/MULTI-NTP-ARCHITECTURE.md) · [Acceptance gates](docs/LAB-ACCEPTANCE.md)
 
-## One install, then manage servers from Studio
+## Windows installation
 
-Download a successful `ARFastSNTP-Inno-Windows-x64` artifact from
-[GitHub Actions](https://github.com/masarray/arintp/actions), extract it
-and run `ARFastSNTP-Setup-Windows-x64.exe`.
+From the most recent successful Windows CI run, download **`ARFastSNTP-Inno-Windows-x64`**, unzip it, and run **`ARFastSNTP-Setup-Windows-x64.exe`** on an isolated test PC. The Inno test installer is currently version **0.10.1** and is **not code-signed**. No public stable release has been tagged.
 
-**Clean installation:** Enter the first NTP Server IP Address. Inno Setup
-installs one automatically started Windows Service and offers to open Studio.
-**Upgrade:** Existing PowerShell/WinForms/Inno service variants are migrated
-using an allowlist. When the canonical `peers.json` already exists, the IP
-page is skipped: the full server list is preserved. A previous executable
-and SCM settings are captured for rollback if activation fails.
+First install asks for a unicast IPv4 NTP server. The Studio **Add / Delete / Enable / Disable** actions update a persistent peer catalog through ACL-protected local IPC without reinstalling the service, showing UAC every time, or restarting SCM. On upgrade, the existing `peers.json` catalog should be preserved; verify rollback on an isolated PC before relying on it.
 
-The Inno wizard is set to its **normal 100% size** rather than the oversized
-modern-style default. Installation progress distinguishes the service
-starting from a verified NTP reply. Closing Studio does not stop syncing.
+Studio displays **status, stratum, offset, server time and RTT** (round-trip delay) with a compact **Status History** and JSON diagnostic export. A source being enabled or reachable does not alone authorize correction. The service elects one time reference; conflicting measurements block changes.
 
-**Studio** has no duplicate application name in the body. The compact PC
-Time/Sync strip is secondary, followed by the principal **NTP Servers**
-explorer: row number, per-source switch, Material server icon, IPv4, reply
-health, stratum, offset, local server time, broadcast field and Delete.
-Add opens a short IP dialog. Status History uses a Material circle-chevron
-and a bounded scrolling list. Window height follows the content instead
-of reserving empty space for hypothetical extra servers.
+## Diagnostics
 
-Add/Delete/ON/OFF changes are sent to an ACL-protected, local Windows
-named pipe. The already-running worker writes the configuration atomically,
-wakes itself, and refreshes telemetry. **No UAC/SmartScreen prompt, service
-installation, SCM stop/start, or background process per server** is needed
-for ordinary source management.
+| Item | Location |
+|---|---|
+| Windows Service | `ARFastSNTP` |
+| Configured NTP sources | `%ProgramData%\ARFastSNTP\peers.json` |
+| Live status | `%ProgramData%\ARFastSNTP\status.json` |
+| Bounded decision journal | `%ProgramData%\ARFastSNTP\status.diagnostics.json` |
+| Installer log | `%ProgramData%\ARFastSNTP\setup.log` |
 
-## Multiple servers: who sets the clock?
+Export logs using the download icon beside Status History. Check exported data for site-specific IP addresses before sharing.
 
-Only **one** canonical worker is permitted to call the Windows clock API.
-It probes configured enabled servers (up to four concurrent UDP requests),
-tracks stratum/RTT/offset, applies bounded backoff to failures, and elects
-one source. Its conservative election requires a strict majority of
-currently valid measurements inside a 250 ms offset interval if two or
-more servers respond. A stable previous source is retained to reduce
-flip-flopping. After correction, prior measurement trust is discarded.
+### Protocol scope and safety
 
-A single responding server can be selected after repeated coherent
-measurements, **marked as degraded operation**. This is a deliberate
-trusted-lab fallback and not a proof of correctness; two valid but
-conflicting servers stop the clock correction. A former selected server
-that becomes unreachable can be replaced by a healthy eligible source.
+- SNTPv4 unicast over IPv4; UDP port 123. No NTS, DNS server pools, IPv6, broadcast reception or full RFC 5905 discipline.
+- Up to 16 sources with a bounded number of concurrent requests and source-election hysteresis. Two IPs belonging to one provider are **not independent time references**.
+- Use an isolated test workstation for large clock corrections. Never disturb live SCADA/SOE time or assume a Npcap RAW Ethernet injection was delivered to a Windows UDP socket.
+- Follow [ARSAS interop diagnostics](docs/ARSAS-NTP-INTEROP.md), [installer tests](docs/INSTALLER-UX-ACCEPTANCE.md), and [release readiness](docs/RELEASE-CANDIDATE-NOTES.md).
 
-See [MULTI-NTP-ARCHITECTURE.md](docs/MULTI-NTP-ARCHITECTURE.md) for
-selection examples, limitations and the remaining acceptance matrix.
-This is **not** a complete RFC 5905 implementation and it does not
-yet support NTS, broadcast reception, DNS source pools or IPv6.
-A server being enabled is not evidence it is reachable/synchronized.
+## Product identity
 
-## Windows operation and diagnostics
+The **canonical artwork is [`assets/favicon/`](assets/favicon)**. The checked-in multi-resolution `favicon.ico` is the single source for the Windows executables, Avalonia window/taskbar, and Inno Setup icon. README and the lightweight web landing page use the matching PNGs and a product-specific web manifest. Desktop styles follow the [Arssyut token provenance](docs/DESIGN-TOKEN-PROVENANCE.md).
 
-- NTP worker status: `%ProgramData%\ARFastSNTP\status.json`
-- Canonical server list: `%ProgramData%\ARFastSNTP\peers.json`
-- Service setup log: `%ProgramData%\ARFastSNTP\setup.log`
-- Installer recovery: `%ProgramData%\ARFastSNTP\installer-recovery`
-- Service name: `ARFastSNTP` (Automatic, continues while Studio is closed)
-
-Advanced unattended *isolated lab* install:
-`ARFastSNTP-Setup-Windows-x64.exe /VERYSILENT /SERVER=192.16.1.175`.
-Optional `/YEAR=2026` sets NTP era reference and `/LABSYNC=0`
-requests monitor-only mode. Updating NTP servers thereafter requires
-**no installer**. A full uninstall removes the catalog/owned registry
-setting; logs are retained for diagnosis.
-
-Builds, regression checks and Inno packaging run in one Windows CI job.
-**CI never changes its own system clock or installs the Windows Service.**
-Physical Windows acceptance (upgrade, named pipe ACL, 1/2/3 sources,
-failover, event records and GUI DPI) is mandatory before promotion.
-The PR remains Draft until those gates are met.
-
-License: [GPL-2.0-or-later](LICENSE), with Arssyut token provenance in
-[docs/DESIGN-TOKEN-PROVENANCE.md](docs/DESIGN-TOKEN-PROVENANCE.md).
-
-## v0.10.1 — calm compact UX and RAW-mode diagnostics
-
-- The title bar owns the application name. A single short PC Time/Sync
-  strip remains above the NTP Explorer.
-- The server table has one shared numeric layout, consistent column/header
-  alignment, 13-DIP readable value typography, bounded height, and subtle
-  hover only. Event History shows local `HH:mm:ss` plus the event; complete
-  timestamp/error text remains in tooltips.
-- Add and Remove windows use a shared dialog chrome and `SizeToContent`:
-  no fixed-height blank space. The Add dialog rejects empty/invalid and
-  duplicate IP addresses without closing and supports Enter/Escape.
-- A Windows UDP timeout now retains the **local UDP IP:ephemeral port**
-  and expected remote server `IP:123` in peer status diagnostics. It does
-  not count a Npcap RAW injection by ARSAS as an accepted NTP reply.
-- For ARSAS same-host/interoperability diagnosis, follow
-  [ARSAS-NTP-INTEROP.md](docs/ARSAS-NTP-INTEROP.md). In particular,
-  `192.16.1.33` is the configured ARSAS server in the supplied log,
-  while `192.16.1.255` is a broadcast target, not a unicast NTP server.
-  Source IP/port + NTP originate must match the exact AR Fast SNTP request.
-- **No changes** to the server election, clock-step thresholds, service
-  installation or source IPC commands in this visual/diagnostic milestone.
+License: [GPL-2.0-or-later](LICENSE) · [Notices](NOTICE).

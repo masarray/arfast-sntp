@@ -1,23 +1,17 @@
-# AR Fast SNTP — Windows x64
+# AR Fast SNTP — Pre-release acceptance
 
-License: GPL-2.0-or-later.
+**Windows x64 test installer:** Inno Setup 0.10.1, Avalonia Studio + one Windows Service, up to 16 unicast IPv4 NTP sources. No public stable release until the gates below are completed.
 
-Installer v0.9.1: one Inno wizard, server IP entry, automatic upgrade of
-the canonical ARFastSNTP Windows Service, then open Avalonia Studio.
-Existing PowerShell/WinForms/Inno layouts are recognized by an allowlist.
-The installer backs up the old executable, service command, startup mode,
-and running state. On failure, rollback is attempted and diagnostics remain
-in ProgramData.
+## Evidence collected
+- Actual Windows screenshots show Cloudflare `162.159.200.1` and `162.159.200.123` delivered validated stratum-3 NTP samples. A small (+179.4 ms) Windows correction was logged in an earlier test.
+- Diagnostic JSON verified coherent sources and source-election decisions. Windows CI checks .NET builds, non-stepping protocol tests, service startup smoke, and Inno compilation.
+- A physical ARSAS Npcap RAW reply to the Windows UDP socket has **not** been proven. See [ARSAS-NTP-INTEROP.md](ARSAS-NTP-INTEROP.md).
 
-The Avalonia monitor now shows PC UTC, sync status, a compact NTP table,
-and a collapsible 16-event history. It no longer displays a user-facing
-reference-year field or an Install & Sync button. Server time is inferred
-from validated unicast replies; broadcast is not claimed without measurement.
+## Release gates — open
+1. Visual interaction on real Windows: history collapse/expand, resize/maximize/restore, 1/6/16 rows, Add/Delete, RTT tooltip, 100/125/150/200% DPI.
+2. Independent-reference NTP consensus, true conflict/outlier handling, failover, stale-sample rejection, and corrected-clock re-verification.
+3. Windows certification PC: large clock jump, TLS/Kaspersky interactions, competing Windows Time updates, upgrade, rollback and clean uninstall.
+4. Long-running resource stability, code-signing strategy and installer reputation. Production SCADA or SOE is not an acceptable clock-step test host.
+5. Verify executable/taskbar/installer icons, brand mark, README, landing page and manifest all use [`assets/favicon`](../assets/favicon).
 
-Only one server is supported by the current worker. Multi-server toggle,
-selection, and automatic failover remain a separate engine milestone.
-An unowned service is never silently modified.
-
-See docs/INSTALLER-UX-ACCEPTANCE.md for regression and field test cases.
-Windows CI never changes its own clock. Physical install/upgrade and
-visual DPI tests are still required before release promotion.
+CI green is not real UI proof or an approval to deploy on production timing systems.
