@@ -241,17 +241,30 @@ public sealed partial class MainWindow : Window
                     "Source conflict" => "Server conflict",
                     "Correcting" => "Correcting time",
                     "No reply" => "No reply",
+                    "Invalid reply" => "Invalid reply",
+                    "Invalid sample" => "Invalid sample",
+                    "Network error" => "Network error",
+                    "Rate limited" => "Rate limited",
+                    "Denied" => "Server denied",
                     _ => "Not synced"
                 };
             SetSync(global, verified);
-            if (snap.State is "Source conflict" or "No reply" or "Correction failed")
+            if (snap.State is "Source conflict" or "No reply" or "Invalid reply" or
+                "Invalid sample" or "Network error" or "Rate limited" or "Denied" or
+                "Correction failed")
             {
                 _hint.IsVisible = true;
-                Set(_hint, snap.State == "Source conflict"
-                    ? "Servers disagree on time. Correction paused."
-                    : snap.State == "No reply"
-                        ? "No valid NTP reply. Check server IP and UDP 123."
-                        : "Windows did not accept the time correction.");
+                Set(_hint, snap.State switch
+                {
+                    "Source conflict" => "Servers disagree on time. Correction paused.",
+                    "No reply" => "No UDP response at Windows socket. Check IP and port 123.",
+                    "Invalid reply" => "UDP reply arrived, but NTP checks rejected it. See row tooltip.",
+                    "Invalid sample" => "NTP samples were inconsistent. See row tooltip.",
+                    "Network error" => "Windows UDP transport error. See row tooltip.",
+                    "Rate limited" => "NTP server requested slower polling.",
+                    "Denied" => "NTP server refused this client.",
+                    _ => "Windows did not accept the time correction."
+                });
             }
             else _hint.IsVisible = false;
             UpdateHistory(snap);

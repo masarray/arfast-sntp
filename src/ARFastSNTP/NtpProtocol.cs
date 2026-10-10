@@ -65,10 +65,15 @@ internal static class NtpProtocol
     }
 
     internal static async Task<SntpSample> QueryAsync(IPAddress server, int serverYear,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, int port = 123)
     {
+        // Nonstandard port is internal-only for a deterministic loopback fixture.
+        // Production callers always use the NTP standard UDP port 123.
+        if (port is < 1 or > 65535)
+            throw new ArgumentOutOfRangeException(nameof(port));
+        var remote = new IPEndPoint(server, port);
         using var socket = new UdpClient(AddressFamily.InterNetwork);
-        socket.Connect(new IPEndPoint(server, 123));
+        socket.Connect(remote);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(2));
         byte[] request = new byte[48];
@@ -77,26 +82,44 @@ internal static class NtpProtocol
         WriteTimestamp(request.AsSpan(40, 8), t1);
         var timer = Stopwatch.StartNew();
         UdpReceiveResult result;
+        bool sent = false;
         try
         {
             await socket.SendAsync(request, timeout.Token);
+            sent = true;
             result = await socket.ReceiveAsync(timeout.Token);
         }
         catch (OperationCanceledException ex) when (
             !cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            // Only classify an actual receive deadline as a timeout. A
-            // user cancellation or clock sample rejection is not "No reply".
+            var local = socket.Client.LocalEndPoint as IPEndPoint;
+            if (!sent)
+                throw new IOException($"NTP UDP send deadline from {local} to {remote}; " +
+                    "no request transmission was confirmed.", ex);
+            // Only a completed send followed by a receive deadline is "No reply".
+            // The wire transmit timestamp binds packet captures to this probe.
             throw new NtpResponseTimeoutException(
-                socket.Client.LocalEndPoint as IPEndPoint, server, ex);
+                local, remote, request.AsSpan(40, 8), ex);
         }
         timer.Stop();
         DateTimeOffset actualReceive = DateTimeOffset.UtcNow;
         if (ClockDiscontinuity.Detected(t1, actualReceive, timer.Elapsed))
             throw new InvalidOperationException("Windows clock jumped during request.");
         DateTimeOffset t4 = t1 + timer.Elapsed;
-        if (!result.RemoteEndPoint.Address.Equals(server) || result.RemoteEndPoint.Port != 123)
-            throw new InvalidOperationException("Unexpected NTP response source.");
-        return Parse(request, result.Buffer, t1, t4, serverYear);
+        try
+        {
+            if (!result.RemoteEndPoint.Equals(remote))
+                throw new InvalidOperationException("Unexpected NTP response source.");
+            return Parse(request, result.Buffer, t1, t4, serverYear);
+        }
+        catch (NtpKissOfDeathException) { throw; } // Authenticated transaction binding, not valid time.
+        catch (InvalidOperationException ex)
+        {
+            // A UDP datagram WAS delivered. Do not relabel parser rejection as
+            // a network timeout: expose exactly which NTP check rejected it.
+            throw new NtpInvalidResponseException(
+                socket.Client.LocalEndPoint as IPEndPoint, remote,
+                request.AsSpan(40, 8), ex);
+        }
     }
 }

@@ -124,9 +124,17 @@ internal sealed class MultiPeerWorker : BackgroundService
                 _runtime[eligible[0].Address].Streak >= 2;
             var decision = PeerElection.Choose(eligible, _selected, oneConfirmed);
             string? chosen = decision.Selected;
-            string overallState = chosen is null
-                ? eligible.Length == 0 ? "No reply" : "Source conflict"
-                : "Verifying";
+            // Network silence, Windows socket errors and NTP validation
+            // failures are different evidence. Preserve the distinction.
+            var failedStates = enabled.Select(p => _runtime[p.Address].State).ToArray();
+            string overallState = chosen is not null ? "Verifying"
+                : eligible.Length != 0 ? "Source conflict"
+                : failedStates.Contains("Invalid reply") ? "Invalid reply"
+                : failedStates.Contains("Denied") ? "Denied"
+                : failedStates.Contains("Rate limited") ? "Rate limited"
+                : failedStates.Contains("Network error") ? "Network error"
+                : failedStates.Contains("Invalid sample") ? "Invalid sample"
+                : "No reply";
             string? evt = null;
             SntpSample? primary = chosen is not null ? _runtime[chosen].Sample : null;
             if (chosen is not null && primary.HasValue)
@@ -253,8 +261,18 @@ internal sealed class MultiPeerWorker : BackgroundService
             rt.SeenAt = 0;
             rt.Streak = 0;
             rt.Failures = Math.Min(rt.Failures + 1, 5);
-            string nextState = ex is NtpKissOfDeathException kod &&
-                kod.Code is "DENY" or "RSTR" ? "Denied" : "No reply";
+            string nextState = ex switch
+            {
+                NtpKissOfDeathException { Code: "DENY" or "RSTR" } => "Denied",
+                NtpKissOfDeathException { Code: "RATE" } => "Rate limited",
+                NtpKissOfDeathException => "Invalid reply",
+                NtpInvalidResponseException => "Invalid reply",
+                NtpResponseTimeoutException => "No reply",
+                System.Net.Sockets.SocketException => "Network error",
+                IOException => "Network error",
+                InvalidOperationException => "Invalid sample",
+                _ => "No reply"
+            };
             if (rt.State != nextState)
                 rt.PendingEvent = address + ": " +
                     (ex is NtpResponseTimeoutException or OperationCanceledException

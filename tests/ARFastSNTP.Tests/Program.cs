@@ -408,5 +408,58 @@ catch (InvalidOperationException) { invalidClockRejected = true; }
 Check("ARSAS unsynchronized LI=3 packet must not set Windows clock",
     invalidClockRejected);
 
-Console.WriteLine(failures == 0 ? "All era tests passed." : $"{failures} era tests failed.");
+
+ 
+// Real UDP loopback transport fixture. No privileged port, external network,
+// Windows clock mutation, installer or service is involved. The response
+// follows the exact ARSAS Mode 4/stratum 2/LOCL transaction shape.
+static async Task<(SntpSample? Sample, Exception? Error)> ProbeLoopbackAsync(
+    bool badOriginate, bool withReply)
+{
+    using var server = new System.Net.Sockets.UdpClient(
+        new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 0));
+    int port = ((System.Net.IPEndPoint)server.Client.LocalEndPoint!).Port;
+    Task responder = Task.Run(async () =>
+    {
+        var received = await server.ReceiveAsync();
+        if (!withReply) return;
+        var bytes = new byte[48];
+        bytes[0] = 0x24; // v4 server mode 4, synchronized LI=0
+        bytes[1] = 2; // ARSAS commissioning stratum
+        "LOCL"u8.CopyTo(bytes.AsSpan(12, 4));
+        received.Buffer.AsSpan(40, 8).CopyTo(bytes.AsSpan(24, 8));
+        if (badOriginate) bytes[24] ^= 1;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        NtpProtocol.WriteTimestamp(bytes.AsSpan(32, 8), now);
+        NtpProtocol.WriteTimestamp(bytes.AsSpan(40, 8), now);
+        await server.SendAsync(bytes, received.RemoteEndPoint);
+    });
+    SntpSample? sample = null;
+    Exception? error = null;
+    try
+    {
+        sample = await NtpProtocol.QueryAsync(
+            System.Net.IPAddress.Loopback, DateTimeOffset.UtcNow.Year,
+            CancellationToken.None, port);
+    }
+    catch (Exception ex) { error = ex; }
+    await responder;
+    return (sample, error);
+}
+var receivedFixture = await ProbeLoopbackAsync(badOriginate: false, withReply: true);
+Check("live UDP loopback Mode 4 from correct socket validated",
+    receivedFixture.Sample is { Stratum: 2 } && receivedFixture.Error is null);
+var rejectedFixture = await ProbeLoopbackAsync(badOriginate: true, withReply: true);
+Check("UDP socket receive with invalid Originate is NOT No reply",
+    rejectedFixture.Error is NtpInvalidResponseException &&
+    rejectedFixture.Error.Message.Contains("originate", StringComparison.OrdinalIgnoreCase) &&
+    rejectedFixture.Sample is null);
+var silentFixture = await ProbeLoopbackAsync(badOriginate: false, withReply: false);
+Check("genuine UDP socket silence is a typed receive timeout with Tx correlation",
+    silentFixture.Error is NtpResponseTimeoutException noRx &&
+    noRx.LocalEndpoint.StartsWith("127.0.0.1:", StringComparison.Ordinal) &&
+    noRx.RemoteEndpoint.StartsWith("127.0.0.1:", StringComparison.Ordinal) &&
+    noRx.RequestTransmitHex.Length == 16);
+
+Console.WriteLine(failures == 0 ? "All regression tests passed." : $"{failures} regression tests failed.");
 Environment.ExitCode = failures == 0 ? 0 : 1;
