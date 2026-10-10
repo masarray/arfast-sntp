@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Canonical icon (do not duplicate binary resources across projects). -->
+    <ApplicationIcon>../../assets/favicon/favicon.ico</ApplicationIcon>
     <AssemblyName>ARFastSNTP.Setup</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
