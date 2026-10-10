@@ -25,6 +25,9 @@ internal sealed class MultiPeerWorker : BackgroundService
         internal string? PendingEvent;
         internal string State = "Waiting";
         internal bool LastProbeInRound;
+        internal bool WasEnabled;
+        internal string? KissCode;
+        internal int RateStrikes;
     }
 
     private readonly ClockEpochGuard _clockEpoch = new();
@@ -43,6 +46,9 @@ internal sealed class MultiPeerWorker : BackgroundService
     private DateTimeOffset? _lastCorrection;
     private bool _pendingVerification;
     private string? _previousState;
+    private long _lastCatalogGeneration = -1;
+    private long _lastNetworkRearmStamp;
+    private long _networkRecoveryStamp;
 
     internal MultiPeerWorker(SyncOptions options, PeerCatalog catalog,
         ILogger<MultiPeerWorker> logger)
@@ -58,6 +64,8 @@ internal sealed class MultiPeerWorker : BackgroundService
     {
         _logger.LogInformation("Multi-peer SNTP worker initialized; correction={Allowed}",
             _options.AllowStep);
+        using var network = new NetworkChangeSignal(_catalog.Wake);
+        long lastHandledNetworkVersion = network.Version;
         while (!stoppingToken.IsCancellationRequested)
         {
             // The clock may be changed by Windows Settings, W32Time, or another
@@ -66,6 +74,46 @@ internal sealed class MultiPeerWorker : BackgroundService
             bool clockChanged = _clockEpoch.Observe(
                 DateTimeOffset.UtcNow, Stopwatch.GetTimestamp());
             var (peers, generation) = _catalog.Snapshot();
+
+            // Network callbacks only wake this thread. Multiple Windows NIC,
+            // gateway and DHCP notifications are debounced into one recovery.
+            // There is no task-per-event, polling timer or second clock owner.
+            if (network.Version != lastHandledNetworkVersion)
+            {
+                TimeSpan quiet = network.QuietFor;
+                if (quiet < NetworkRecoveryPolicy.Debounce)
+                {
+                    try
+                    {
+                        await Task.Delay(NetworkRecoveryPolicy.Debounce - quiet,
+                            stoppingToken);
+                    }
+                    catch (OperationCanceledException) { break; }
+                }
+                long newest = network.Version;
+                if (newest != lastHandledNetworkVersion)
+                {
+                    lastHandledNetworkVersion = newest;
+                    long nowStamp = Stopwatch.GetTimestamp();
+                    if (_lastNetworkRearmStamp == 0 ||
+                        Stopwatch.GetElapsedTime(_lastNetworkRearmStamp, nowStamp) >=
+                            NetworkRecoveryPolicy.MinimumRearm)
+                    {
+                        _lastNetworkRearmStamp = nowStamp;
+                        _networkRecoveryStamp = nowStamp;
+                        // Never carry an apparently "Synced" status across an
+                        // address/route change. Re-evaluate with fresh NTP data.
+                        DiscardSamples(preserveVerification: true);
+                        NoteOnce("Network address/availability changed; rechecking NTP sources.");
+                    }
+                }
+            }
+            if (_lastCatalogGeneration != generation)
+            {
+                if (_lastCatalogGeneration != -1)
+                    DiscardSamples(preserveVerification: true);
+                _lastCatalogGeneration = generation;
+            }
             if (clockChanged)
             {
                 DiscardSamples();
@@ -81,10 +129,27 @@ internal sealed class MultiPeerWorker : BackgroundService
                     _runtime[peer.Address] = rt = new PeerRuntime();
                 if (!peer.Enabled)
                 {
+                    rt.WasEnabled = false;
                     rt.State = "Off";
                     rt.Sample = null;
                     rt.Error = null;
                     rt.Streak = 0;
+                    // No network request or Windows clock write in OFF.
+                    // Preserve server-originated RATE / DENY / RSTR.
+                }
+                else if (!rt.WasEnabled)
+                {
+                    rt.WasEnabled = true;
+                    if (NetworkRecoveryPolicy.CanRearm(rt.KissCode))
+                    {
+                        rt.NextAt = 0;
+                        rt.Failures = 0;
+                        rt.State = "Waiting";
+                        rt.Error = null;
+                    }
+                    else
+                        rt.State = NetworkRecoveryPolicy.IsPermanentDenial(rt.KissCode)
+                            ? "Denied" : "Rate limited";
                 }
                 rt.LastProbeInRound = false;
             }
@@ -112,6 +177,15 @@ internal sealed class MultiPeerWorker : BackgroundService
                     try { await ProbeAsync(peer.Address, generation, stoppingToken).ConfigureAwait(false); }
                     finally { slots.Release(); }
                 })).ConfigureAwait(false);
+            }
+            // A route change mid-flight invalidates even successfully
+            // returned UDP samples. Handle the coalesced notification next.
+            if (network.Version != lastHandledNetworkVersion)
+            {
+                DiscardSamples(preserveVerification: true);
+                Publish(peers, "Verifying", null,
+                    "Network changed during NTP probing; awaiting fresh replies.");
+                continue;
             }
             // An external Windows clock adjustment between individual NTP
             // queries must not mix offsets measured in different epochs.
@@ -217,7 +291,9 @@ internal sealed class MultiPeerWorker : BackgroundService
                             _lastCorrection = DateTimeOffset.UtcNow;
                             _pendingVerification = true;
                             // All pre-step offsets have a different epoch.
-                            DiscardSamples();
+                            // Preserve verification until a NEW post-step
+                            // response proves the corrected Windows time.
+                            DiscardSamples(preserveVerification: true);
                         }
                     }
                 }
@@ -227,7 +303,8 @@ internal sealed class MultiPeerWorker : BackgroundService
                 // No current consensus: never carry a stale selection into
                 // the status snapshot or use its old offset for correction.
                 _selected = null;
-                _pendingVerification = false;
+                // An unverified successful local step remains pending across
+                // temporary network loss, not falsely marked as verified.
             }
             if (chosen is null && eligible.Length > 1)
                 NoteOnce("NTP sources disagree; Windows correction held.");
@@ -254,25 +331,35 @@ internal sealed class MultiPeerWorker : BackgroundService
     /// Reset due times so recovery probes are scheduled without waiting for a
     /// stable-poll interval, while respecting per-query bounded concurrency.
     /// </summary>
-    private void DiscardSamples()
+    private void DiscardSamples(bool preserveVerification = false)
     {
         _selected = null;
-        _pendingVerification = false;
+        if (!preserveVerification) _pendingVerification = false;
         foreach (var rt in _runtime.Values)
         {
             rt.Sample = null;
             rt.SeenAt = 0;
-            rt.NextAt = 0;
+            // An address change, clock jump or server toggle cannot erase
+            // the NTP server's RATE backoff or DENY/RSTR prohibition.
+            if (NetworkRecoveryPolicy.CanRearm(rt.KissCode))
+            {
+                rt.NextAt = 0;
+                rt.Failures = 0;
+                rt.State = "Waiting";
+                rt.Error = null;
+            }
+            else
+                rt.State = NetworkRecoveryPolicy.IsPermanentDenial(rt.KissCode)
+                    ? "Denied" : "Rate limited";
             rt.Streak = 0;
             rt.PendingEvent = null;
             rt.LastProbeInRound = false;
-            rt.State = "Waiting";
-            rt.Error = null;
         }
     }
 
     private static bool IsDue(PeerRuntime peer) =>
-        peer.NextAt == 0 || Stopwatch.GetElapsedTime(peer.NextAt) >= TimeSpan.Zero;
+        !NetworkRecoveryPolicy.IsPermanentDenial(peer.KissCode) &&
+        (peer.NextAt == 0 || Stopwatch.GetElapsedTime(peer.NextAt) >= TimeSpan.Zero);
     // NextAt uses a monotonic expiry timestamp, not PC wall-clock time.
 
     private async Task ProbeAsync(string address, long generation, CancellationToken token)
@@ -315,6 +402,8 @@ internal sealed class MultiPeerWorker : BackgroundService
             rt.Error = null;
             rt.Streak = Math.Min(rt.Streak + 1, 100);
             rt.Failures = 0;
+            rt.KissCode = null;
+            rt.RateStrikes = 0;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is IOException or InvalidOperationException
@@ -333,11 +422,35 @@ internal sealed class MultiPeerWorker : BackgroundService
             rt.Error = ex is OperationCanceledException
                 ? "NTP request timed out. Check network route and UDP 123."
                 : ex.Message;
-            // RATE and DENY must not trigger busy-loop retransmission.
-            double seconds = ex is NtpKissOfDeathException
-                ? 60 : Math.Min(30, 1 << rt.Failures);
-            rt.NextAt = Stopwatch.GetTimestamp() +
-                (long)(Stopwatch.Frequency * seconds);
+            TimeSpan delay;
+            if (ex is NtpKissOfDeathException kod)
+            {
+                rt.KissCode = kod.Code;
+                if (NetworkRecoveryPolicy.IsPermanentDenial(kod.Code))
+                    delay = TimeSpan.MaxValue; // Never query DENY/RSTR again.
+                else if (kod.Code == "RATE")
+                {
+                    rt.RateStrikes = Math.Min(rt.RateStrikes + 1, 6);
+                    delay = NetworkRecoveryPolicy.RateBackoff(rt.RateStrikes);
+                }
+                else
+                {
+                    rt.KissCode = null; // unknown KoD: discard and use backoff
+                    delay = TimeSpan.FromSeconds(60);
+                }
+            }
+            else
+            {
+                // Transport error only. A newly restored route temporarily
+                // caps retry delay without bypassing a server-side KoD.
+                bool recovering = _networkRecoveryStamp != 0 &&
+                    Stopwatch.GetElapsedTime(_networkRecoveryStamp) <
+                        NetworkRecoveryPolicy.RecoveryWindow;
+                delay = NetworkRecoveryPolicy.TransportBackoff(rt.Failures, recovering);
+            }
+            rt.NextAt = delay == TimeSpan.MaxValue ? long.MaxValue :
+                Stopwatch.GetTimestamp() +
+                    (long)(Stopwatch.Frequency * delay.TotalSeconds);
             Interlocked.Increment(ref _rejected);
         }
     }

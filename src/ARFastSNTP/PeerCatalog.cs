@@ -74,6 +74,16 @@ internal sealed class PeerCatalog : IDisposable
     internal Task<bool> WaitAsync(TimeSpan delay, CancellationToken cancellationToken) =>
         _changed.WaitAsync(delay, cancellationToken);
 
+    // Wakes the same supervisor on a NIC/route change without mutating peer
+    // catalog generation. Only one pending signal can exist at a time.
+    internal void Wake()
+    {
+        if (_changed.CurrentCount != 0) return;
+        try { _changed.Release(); }
+        catch (SemaphoreFullException) { /* another signal is already queued */ }
+        catch (ObjectDisposedException) { /* service is shutting down */ }
+    }
+
     internal NtpPeer[] Mutate(string action, string? rawAddress)
     {
         if (!TryNormalize(rawAddress, out var ip))
