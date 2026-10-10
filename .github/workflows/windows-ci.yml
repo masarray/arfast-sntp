@@ -82,6 +82,49 @@ jobs:
       - name: Validate lean Windows installer payload
         shell: pwsh
         run: |
+          # Single canonical branding pack. These fail-fast checks protect
+          # the executable, Inno installer and browser/README identities.
+          $iconPath = 'assets/favicon/favicon.ico'
+          $ico = [System.IO.File]::ReadAllBytes((Resolve-Path $iconPath).Path)
+          if ($ico.Length -lt 1000 -or $ico[0] -ne 0 -or $ico[1] -ne 0 -or
+              $ico[2] -ne 1 -or $ico[3] -ne 0) {
+            throw 'Missing or invalid multi-resolution Windows ICO'
+          }
+          foreach ($project in @(
+            'src/ARFastSNTP/ARFastSNTP.csproj',
+            'src/ARFastSNTP.Dashboard/ARFastSNTP.Dashboard.csproj',
+            'src/ARFastSNTP.Setup/ARFastSNTP.Setup.csproj',
+            'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj'
+          )) {
+            if (-not (Get-Content $project -Raw).Contains(
+                '<ApplicationIcon>../../assets/favicon/favicon.ico</ApplicationIcon>')) {
+              throw "Executable lost its canonical brand icon: $project"
+            }
+          }
+          $studioProj = Get-Content 'src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj' -Raw
+          if (-not $studioProj.Contains('Assets/brand.ico') -or
+              -not $studioProj.Contains('Assets/brand.png')) {
+            throw 'Studio lacks embedded brand images'
+          }
+          $window = Get-Content 'src/ARFastSNTP.Studio/MainWindow.axaml' -Raw
+          if (-not $window.Contains('Icon="avares://ARFastSNTP.Studio/Assets/brand.ico"') -or
+              -not $window.Contains('Assets/brand.png')) {
+            throw 'Studio window and brand mark missing'
+          }
+          $inno = Get-Content 'installer/ARFastSNTP.iss' -Raw
+          if (-not $inno.Contains('SetupIconFile=..\assets\favicon\favicon.ico')) {
+            throw 'Inno installer lost the shared icon'
+          }
+          $landing = Get-Content 'index.html' -Raw
+          if (-not $landing.Contains('assets/favicon/favicon.ico') -or
+              -not $landing.Contains('assets/favicon/site.webmanifest')) {
+            throw 'Landing page favicon or manifest is missing'
+          }
+          $manifest = Get-Content 'assets/favicon/site.webmanifest' -Raw | ConvertFrom-Json
+          if ($manifest.name -ne 'AR Fast SNTP' -or @($manifest.icons).Count -lt 2) {
+            throw 'Web manifest still contains placeholder branding'
+          }
+          Write-Host 'Canonical Windows, Studio, Inno and landing brand assets verified.'
           Copy-Item setup-build/ARFastSNTP.Setup.exe publish/
           foreach ($path in @(
             'publish/worker/ARFastSNTP.exe',
