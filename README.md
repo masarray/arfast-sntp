@@ -12,7 +12,20 @@
   <a href="docs/MULTI-NTP-ARCHITECTURE.md">Architecture</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/masarray/arfast-sntp/actions/workflows/windows-ci.yml"><img alt="Windows CI" src="https://github.com/masarray/arfast-sntp/actions/workflows/windows-ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/masarray/arfast-sntp/actions/workflows/site-ci.yml"><img alt="Public site checks" src="https://github.com/masarray/arfast-sntp/actions/workflows/site-ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/masarray/arfast-sntp/releases/latest"><img alt="Latest GitHub release" src="https://img.shields.io/github/v/release/masarray/arfast-sntp?label=release"></a>
+</p>
+
+
 > **Public Windows release (unsigned).** Intended for authorized engineering, commissioning and test PCs. Do **not** use it to discipline time on live SCADA, SOE, historian or other critical systems. Extended independent-reference certification, upgrade rollback, code signing and long-duration soak are tracked in [Issue #2](https://github.com/masarray/arfast-sntp/issues/2).
+
+## Project status
+
+**Latest downloadable version: [v0.10.3](https://github.com/masarray/arfast-sntp/releases/tag/v0.10.3).** The published installer stays immutable even when newer, unreleased maintenance commits reach `main`. Download the versioned binary from Releases; do not assume `main` builds are identical to an existing release.
+
+[Current status and release boundaries](docs/PROJECT-STATUS.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md) · [Security policy](SECURITY.md)
 
 ## What is AR Fast SNTP?
 
