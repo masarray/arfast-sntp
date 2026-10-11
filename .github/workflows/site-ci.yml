@@ -1,0 +1,53 @@
+name: Public site checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'download.html'
+      - 'site.css'
+      - 'release.js'
+      - 'README.md'
+      - 'LICENSE'
+      - 'assets/screenshot/**'
+      - 'assets/favicon/**'
+      - 'SECURITY.md'
+      - 'CONTRIBUTING.md'
+      - 'sitemap.xml'
+      - 'robots.txt'
+      - '.nojekyll'
+      - 'tools/check_site.py'
+      - '.github/workflows/site-ci.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'download.html'
+      - 'site.css'
+      - 'release.js'
+      - 'README.md'
+      - 'LICENSE'
+      - 'assets/screenshot/**'
+      - 'assets/favicon/**'
+      - 'SECURITY.md'
+      - 'CONTRIBUTING.md'
+      - 'sitemap.xml'
+      - 'robots.txt'
+      - '.nojekyll'
+      - 'tools/check_site.py'
+      - '.github/workflows/site-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: site-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check real screenshots, download assets, metadata and docs
+        run: python3 tools/check_site.py
