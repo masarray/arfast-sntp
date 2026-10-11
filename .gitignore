@@ -1,0 +1,32 @@
+# .NET / IDE
+**/bin/
+**/obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Local build/publish output
+publish/
+setup-build/
+dist/
+artifacts/
+*.nupkg
+*.snupkg
+
+# Host-specific data and crash logs
+peers.json
+status.json
+status.diagnostics.json
+setup.log
+*.etl
+*.dmp
+
+# OS
+.DS_Store
+Thumbs.db
