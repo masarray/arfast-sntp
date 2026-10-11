@@ -1,0 +1,39 @@
+name: Bug report
+description: Reproducible defects, not security vulnerabilities
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Redact private site IPs, machine identifiers and secrets. Never test clock changes on production SCADA/SOE machines. For security vulnerabilities follow SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit SHA
+      placeholder: "v0.10.3"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows environment / display scale
+      placeholder: "Windows 11 x64, 125% scaling"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ... 2. ... 3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected vs observed
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or screenshots
+      description: "Remove private topology and identifying details."

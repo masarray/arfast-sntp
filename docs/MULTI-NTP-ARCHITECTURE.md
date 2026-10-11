@@ -1,4 +1,6 @@
-# AR Fast SNTP — multi-peer architecture (v0.10 candidate)
+# AR Fast SNTP — multi-source engine architecture
+
+> Current public baseline: v0.10.3. This document describes engineering behavior, **not** industrial/SCADA timing certification.
 
 This milestone implements a **bounded NTP client for a trusted isolated
 Windows lab**, not a general Internet NTP daemon or RFC-5905-complete clock
@@ -40,11 +42,10 @@ Enable/Disable without UAC, SmartScreen or service restart. Changes are
 stored before acknowledgement; a full installer upgrade preserves the
 catalog and service identity.
 
-Studio visual order: single compact PC Time / Sync Status strip, dominant
-NTP table, collapsed event history. Window height follows content
-(`SizeToContent=Height`), with bounded list/history scroll regions.
-Material server/add/delete/circle-chevron icons are used; source enable
-colors are different from server reply/selection health.
+Studio visual order: single compact PC Time / Sync Status strip, NTP table
+and expandable event history. The resizable window uses bounded list/history
+scrolling without changing native window bounds each time the peer catalog
+refreshes. Source enable and reply-status colors differ.
 
 ## Election examples
 
@@ -68,7 +69,7 @@ RTT/stratum are telemetry and quality tie-breakers, not proofs of accuracy.
 A sole unauthenticated source cannot establish absolute correct time.
 These limitations must not be hidden by the GUI.
 
-Before merge/release: verify 1/2/3/many-server cases against real GPS/NTP
+Before claiming industrial production certification: verify 1/2/3/many-server cases against real GPS/NTP
 devices, simulated conflicting clocks and KoD rate limits, reload after
 reboot, add/remove during active requests, rollback/upgrades from 0.9.x,
 Windows Service/pipe ACLs, visual DPI 100–200%, and resource stability
