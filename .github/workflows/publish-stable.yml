@@ -28,7 +28,7 @@ jobs:
       ARTIFACT: ARFastSNTP-Inno-Windows-x64
     steps:
       - name: Fetch exact verified main revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
