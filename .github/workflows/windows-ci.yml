@@ -276,7 +276,7 @@ jobs:
           Write-Host "Inno Setup compiled: $installer ($bytes bytes)"
 
       - name: Upload single Windows setup executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ARFastSNTP-Inno-Windows-x64
           path: |
