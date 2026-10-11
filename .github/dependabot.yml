@@ -1,7 +1,12 @@
 version: 2
 updates:
   - package-ecosystem: "nuget"
-    directory: "/"
+    directories:
+      - "/src/ARFastSNTP"
+      - "/src/ARFastSNTP.Studio"
+      - "/src/ARFastSNTP.Dashboard"
+      - "/src/ARFastSNTP.Setup"
+      - "/tests/ARFastSNTP.Tests"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
