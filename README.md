@@ -26,6 +26,21 @@ AR Fast SNTP combines a calm, compact **Avalonia Studio** with **one persistent 
 | Bounded Status History and diagnostic export | Config persisted without service reinstall/restart |
 | Responsive compact dark UI and branded Windows installer | Worker stays active after closing Studio |
 
+## Real Windows Studio screenshots
+
+These are **actual screenshots from the Windows application**, not a simulated dashboard. Open any image at full resolution.
+
+<p align="center">
+  <a href="assets/screenshot/Screenshot%202026-10-11%20073259.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20073259.webp" width="880" alt="Real AR Fast SNTP Studio showing two NTP sources, selected source, RTT and expanded Status History"></a>
+</p>
+<p align="center"><em>Selected source, per-peer RTT and expanded Status History.</em></p>
+
+| Add an NTP source | Observe source health and fallback |
+|---|---|
+| <a href="assets/screenshot/Screenshot%202026-10-11%20072931.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072931.webp" width="430" alt="Add NTP Server dialog with IPv4 input"></a> | <a href="assets/screenshot/Screenshot%202026-10-11%20072958.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072958.webp" width="430" alt="Two servers: one selected and one reporting No reply"></a> |
+
+[Remove-server confirmation](assets/screenshot/Screenshot%202026-10-11%20073230.webp) · [Original screenshots](assets/screenshot)
+
 ## Download and install
 
 **[Download latest Windows x64 installer (.exe)](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe)**
@@ -90,4 +105,4 @@ CI does **not** adjust a runner's actual system clock; physical correction tests
 
 All executable, Inno, web and README icons come from [assets/favicon](assets/favicon). Desktop styling follows [Arssyut design-token provenance](docs/DESIGN-TOKEN-PROVENANCE.md).
 
-Released under [GPL-2.0-or-later](LICENSE). See [NOTICE](NOTICE) for credits and notices. Contributions and reproducible issues are welcome; please redact private network/site information from diagnostic exports.
+Released under [GPL-2.0-or-later](LICENSE). See [NOTICE](NOTICE) for credits and third-party attribution. Read [CONTRIBUTING.md](CONTRIBUTING.md) for PR guidance and [SECURITY.md](SECURITY.md) for private vulnerability reporting; redact site/network information from diagnostics.
