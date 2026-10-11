@@ -17,7 +17,7 @@
     <AvaloniaResource Include="../../assets/favicon/favicon-32x32.png" Link="Assets/brand.png" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
     <Compile Include="../ARFastSNTP.Dashboard/DashboardStatus.cs" Link="Interop/DashboardStatus.cs" />
     <Compile Include="../ARFastSNTP/SourceControlProtocol.cs" Link="Interop/SourceControlProtocol.cs" />
     <Compile Include="../ARFastSNTP/NtpPeer.cs" Link="Interop/NtpPeer.cs" />
