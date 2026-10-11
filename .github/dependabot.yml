@@ -1,5 +1,7 @@
 version: 2
 updates:
+  # This Windows .NET 8 app has tightly validated Avalonia/service versions.
+  # Never perform a major runtime/framework upgrade as routine maintenance.
   - package-ecosystem: "nuget"
     directories:
       - "/src/ARFastSNTP"
@@ -9,9 +11,33 @@ updates:
       - "/tests/ARFastSNTP.Tests"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      safe-nuget-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  # Actions changes must also remain reviewable, never auto-merged.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      safe-action-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
