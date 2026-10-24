@@ -28,7 +28,7 @@ jobs:
         run: python3 tools/winget_manifest.py --check packaging/winget/manifests/m/masarray/ARFastSNTP/0.10.3
 
   prepare:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v'))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v'))
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 15
