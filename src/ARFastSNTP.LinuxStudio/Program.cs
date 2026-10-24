@@ -36,7 +36,7 @@ internal sealed class StudioWindow : Window
     private readonly TextBlock _state = new() { FontSize = 17 };
     private readonly TextBlock _details = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _peers = new() { FontSize = 13, TextWrapping = TextWrapping.Wrap };
-    private readonly TextBox _address = new() { Watermark = "SNTP server IPv4 address", Width = 250 };
+    private readonly TextBox _address = new() { PlaceholderText = "SNTP server IPv4 address", Width = 250 };
     private readonly Button _add = new() { Content = "Add server", MinWidth = 116 };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
 
