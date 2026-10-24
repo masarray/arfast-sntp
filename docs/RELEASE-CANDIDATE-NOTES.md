@@ -3,7 +3,7 @@
 **Public Windows installer:** v0.10.3, Avalonia Studio + one Windows Service, up to 16 unicast IPv4 NTP sources. Public availability does **not** imply industrial/SCADA production certification; the following extended acceptance gates remain open.
 
 ## Evidence collected
-- Actual Windows screenshots show public provider `162.159.200.1` and `162.159.200.123` delivered validated stratum-3 NTP samples. A small (+179.4 ms) Windows correction was logged in an earlier test.
+- Actual Windows test screenshots show two public NTP IPv4 addresses returning validated stratum-3 samples. A small (+179.4 ms) Windows correction was logged in an earlier test.
 - Diagnostic JSON verified coherent sources and source-election decisions. Windows CI checks .NET builds, non-stepping protocol tests, service startup smoke, and Inno compilation.
 - A physical ARSAS raw link-layer reply to the Windows UDP socket has **not** been proven. See [ARSAS-NTP-INTEROP.md](ARSAS-NTP-INTEROP.md).
 

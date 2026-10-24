@@ -24,7 +24,7 @@ Compare the reported hexadecimal SHA-256 digest to the `.sha256` file. This is a
 
 **For trusted isolated lab/test PCs only. Not for production SCADA, SOE, historian or any critical system.** The default installer activates clock correction when it has an eligible reference. To test monitor-only operation, run the installer with `/LABSYNC=0`. Administrator approval is required at install time.
 
-Reported real tests accepted two public public provider NTP IPv4 replies and a small clock correction. They do **not** establish GPS-grade precision, independent sources, robust recovery from a very large time jump, or production acceptance.
+Reported real tests accepted two public NTP server replies and a small clock correction. They do **not** establish GPS-grade precision, independent sources, robust recovery from a very large time jump, or production acceptance.
 
 ## Outstanding validation
 

@@ -468,7 +468,7 @@ internal sealed class MultiPeerWorker : BackgroundService
                 rt.PendingEvent = address + ": " + NtpFailureClassifier.Event(ex);
             rt.State = nextState;
             // Detailed local ephemeral port is available on row hover only.
-            // It is essential for matching a RAW raw packet capture frame to the socket.
+            // It is essential for correlating a raw-frame packet capture with the UDP socket.
             rt.Error = ex is OperationCanceledException
                 ? "NTP request timed out. Check network route and UDP 123."
                 : ex.Message;
