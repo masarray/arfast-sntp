@@ -118,7 +118,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/linux-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: startsWith(github.ref, 'refs/tags/linux-v')
     needs: linux
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -136,9 +136,6 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            tag="linux-v0.1.0-beta.1"
-          fi
           [[ "$tag" =~ ^linux-v[0-9]+[.][0-9]+[.][0-9]+(-[a-zA-Z0-9.-]+)?$ ]] || {
             echo 'Use a linux-vX.Y.Z tag.' >&2
             exit 1
@@ -147,12 +144,9 @@ jobs:
             echo 'Refusing to mutate an existing release.' >&2
             exit 1
           fi
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            target_arg=(--verify-tag)
-          else
-            target_arg=(--target "$GITHUB_SHA")
-          fi
+          # Publishing is tag-only; main branch pushes are build/test only.
+          target_arg=(--verify-tag)
           gh release create "$tag" release-assets/ARFastSNTP-Linux-x64.tar.gz release-assets/ARFastSNTP-Linux-x64.tar.gz.sha256 \
             --repo "$GITHUB_REPOSITORY" "${target_arg[@]}" --prerelease --latest=false \
             --title "AR Fast SNTP $tag — experimental Linux x64" \
-            --notes "Experimental Linux build for authorized engineering and lab testing only. Review README-LINUX.md. Not validated for production SCADA/SOE timing."
+            --notes "Linux x64 desktop beta. Download the archive and checksum, unpack it, run the included install.sh, and enter your NTP server IP in AR Fast SNTP. See README-LINUX.md for setup details and service commands."

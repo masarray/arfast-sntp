@@ -4,6 +4,7 @@
 Purposefully never invokes the Windows clock or starts the SNTP service.
 """
 from html.parser import HTMLParser
+import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -71,6 +72,35 @@ if "simulated dashboard" in index.lower() and "not a simulated dashboard" not in
     failures.append("landing must not present simulated data as a real screenshot")
 if "assets/screenshot/" not in readme or "assets/screenshot/" not in index:
     failures.append("real screenshots must be visible in README and landing")
+# Keep beginner and support documentation free of broken local links.
+# Check Markdown links and inline HTML assets without depending on GitHub APIs.
+PUBLIC_DOCS = (
+    "README.md", "SUPPORT.md", "SECURITY.md", "CONTRIBUTING.md",
+    "docs/QUICK-START.md", "docs/LINUX-INSTALL.md",
+    "docs/PROJECT-STATUS.md", "docs/ENGINEERING-ROADMAP.md",
+    "docs/RELEASE-NOTES-0.10.4.md",
+    "docs/archive/HANDOFF-2026-10-11.md",
+)
+MARKDOWN_LINK = re.compile(r'!?\[[^\r\n\]]*\]\(([^)\r\n]+)\)')
+INLINE_HTML_LINK = re.compile(r"""(?:href|src)=["']([^"']+)["']""")
+for filename in PUBLIC_DOCS:
+    document = ROOT / filename
+    if not document.is_file():
+        failures.append(f"missing user documentation: {filename}")
+        continue
+    body = document.read_text(encoding="utf-8")
+    refs = [m.group(1) for m in MARKDOWN_LINK.finditer(body)]
+    refs.extend(m.group(1) for m in INLINE_HTML_LINK.finditer(body))
+    for ref in refs:
+        parsed = urlsplit(ref)
+        if parsed.scheme or parsed.netloc or not parsed.path:
+            continue
+        target = (document.parent / unquote(parsed.path)).resolve()
+        if target != ROOT and ROOT not in target.parents:
+            failures.append(f"{filename}: local link escapes repository: {ref}")
+        elif not target.exists():
+            failures.append(f"{filename}: broken local link: {ref}")
+
 for name in SHOTS:
     file = ROOT / "assets/screenshot" / name
     if not file.is_file():
