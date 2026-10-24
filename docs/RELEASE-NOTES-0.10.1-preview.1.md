@@ -24,10 +24,10 @@ Compare the reported hexadecimal SHA-256 digest to the `.sha256` file. This is a
 
 **For trusted isolated lab/test PCs only. Not for production SCADA, SOE, historian or any critical system.** The default installer activates clock correction when it has an eligible reference. To test monitor-only operation, run the installer with `/LABSYNC=0`. Administrator approval is required at install time.
 
-Reported real tests accepted two public Cloudflare NTP IPv4 replies and a small clock correction. They do **not** establish GPS-grade precision, independent sources, robust recovery from a very large time jump, or production acceptance.
+Reported real tests accepted two public NTP server replies and a small clock correction. They do **not** establish GPS-grade precision, independent sources, robust recovery from a very large time jump, or production acceptance.
 
 ## Outstanding validation
 
-Windows DPI 100–200% and live GUI behavior; real 1/2/3-source failover and conflicting independent servers; long-running resource soak; upgraded service rollback/uninstall; large clock-step barrier and antivirus/TLS effects. ARSAS/Npcap RAW same-host Mode 4 delivery remains unverified. Track these in [Issue #2](https://github.com/masarray/arfast-sntp/issues/2).
+Windows DPI 100–200% and live GUI behavior; real 1/2/3-source failover and conflicting independent servers; long-running resource soak; upgraded service rollback/uninstall; large clock-step barrier and antivirus/TLS effects. ARSAS/raw link-layer same-host Mode 4 delivery remains unverified. Track these in [Issue #2](https://github.com/masarray/arfast-sntp/issues/2).
 
 No public **stable** release claim is made for this version. Feedback, redacted diagnostics and screenshots are welcome.

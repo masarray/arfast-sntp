@@ -15,7 +15,7 @@ The initial NTP response decoder chooses an era using the **local Windows clock*
 - Implement Windows Service lifecycle and structured Event Log/JSON logs; avoid tight restart loops.
 - Add deterministic NTP simulator tests: originate mismatch, LI=3, stratum 0/16, replay, malformed packets, time jumps, 2036 era rollover, packet delay, and KoD.
 - Implement configurable conservative operational policy; never step the clock on a live SCADA computer without approval.
-- Prevent conflicts with Siemens/Meinberg/W32Time clock discipline.
+- Prevent conflicts with other time-setting services and the built-in system clock service clock discipline.
 - Test against the actual GPS server on an isolated certification PC.
 
 ## CI strategy

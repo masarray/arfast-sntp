@@ -44,14 +44,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-arfast.ps1
 
 The helper checks the Windows installer SHA-256 against the published release before opening the usual setup wizard. You can read the script first: [tools/install-windows.ps1](tools/install-windows.ps1).
 
-**WinGet support is being prepared.** Once the package is accepted into the official community catalog, the command will be:
-
-```powershell
-winget install --id masarray.ARFastSNTP --exact --interactive
-```
-
-Until then, use the verified [official Windows installer](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe). See [WinGet progress and manifest sources](docs/WINGET.md).
-
 ### Linux x64
 
 **[Download Linux beta](https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1)**
@@ -92,7 +84,7 @@ During engineering tests on four Windows HMI computers, initial correction was o
 Use the IPv4 address of an NTP/SNTP server reachable from your PC.
 
 - **Industrial lab:** Enter the IP address of your GPS-referenced NTP server.
-- **Home/office experiment:** Try a public NTP server IPv4 address from a trusted provider, such as [Google Public NTP](https://developers.google.com/time) or [Cloudflare Time Services](https://developers.cloudflare.com/time-services/).
+- **Home/office experiment:** Try a public NTP server IPv4 address published by a trusted time-service provider.
 
 The client *requests* the time from the server; the server does not have to broadcast anything. Only use sources you trust and are permitted to access.
 
@@ -108,6 +100,6 @@ This project uses **C# / .NET 8**, **Avalonia** and SNTPv4 over IPv4.
 - [Security and responsible usage](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
-Use a PC where you are authorized to adjust the system clock; time changes can affect other applications. For production-critical time systems, follow your site's tested time synchronization design. Installers and checksums are available in [GitHub Releases](https://github.com/masarray/arfast-sntp/releases). Windows v0.10.3 is currently unsigned.
+Use a PC where you are authorized to adjust the system clock; time changes can affect other applications. For production-critical time systems, follow your site's tested time synchronization design. Installers and checksums are available in [GitHub Releases](https://github.com/masarray/arfast-sntp/releases). The Windows installer is currently unsigned; the GitHub release includes a checksum.
 
 Licensed under [GPL-2.0-or-later](LICENSE). See [NOTICE](NOTICE).

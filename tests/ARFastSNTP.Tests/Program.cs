@@ -521,7 +521,7 @@ var capturedSelfTarget = new NtpResponseTimeoutException(
 Check("pcap .33 to .33 request is diagnosed as local target",
     capturedSelfTarget.IsSelfTarget &&
     NtpFailureClassifier.State(capturedSelfTarget) == "Local target" &&
-    capturedSelfTarget.Message.Contains("Npcap RAW", StringComparison.Ordinal) &&
+    capturedSelfTarget.Message.Contains("raw link-layer", StringComparison.Ordinal) &&
     capturedSelfTarget.RequestTransmitHex == "EE7429C890E71624");
 
 Check("received-but-invalid NTP reply is separately classified",

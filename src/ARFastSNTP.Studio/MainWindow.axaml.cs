@@ -268,7 +268,7 @@ public sealed partial class MainWindow : Window
                 {
                     "Source conflict" => "Servers disagree on time. Correction paused.",
                     "No reply" => "No UDP response at Windows socket. Check IP and port 123.",
-                    "Local target" => "NTP server IP is on this PC. RAW Npcap may not loop back to UDP socket.",
+                    "Local target" => "NTP server IP is on this PC. Link-layer packet injection may not reach the local UDP socket.",
                     "Invalid reply" => "UDP reply arrived, but NTP checks rejected it. See row tooltip.",
                     "Invalid sample" => "NTP samples were inconsistent. See row tooltip.",
                     "Network error" => "Windows UDP transport error. See row tooltip.",

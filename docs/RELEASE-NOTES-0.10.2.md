@@ -28,7 +28,7 @@ The default installer permits Windows clock correction when the source is verifi
 
 This build is **not Authenticode-signed**; SmartScreen reputation may be limited. Verify the GitHub release source and checksum. Do not disable antivirus or Group Policy protections merely to install it.
 
-**Not certified for operational SCADA, SOE, historian, or GPS-grade reference timing.** This release is not evidence of 24-hour soak, installer rollback on every older version, deterministic response SLA across every NIC/topology, or full RFC 5905 clock discipline. The ARSAS same-host Npcap RAW→Windows UDP delivery issue is not claimed resolved.
+**Not certified for operational SCADA, SOE, historian, or GPS-grade reference timing.** This release is not evidence of 24-hour soak, installer rollback on every older version, deterministic response SLA across every NIC/topology, or full RFC 5905 clock discipline. The same-host raw link-layer→Windows UDP delivery issue is not claimed resolved.
 
 Source: [repository](https://github.com/masarray/arfast-sntp) · [Release acceptance / future industrial certification](https://github.com/masarray/arfast-sntp/issues/2) · [Multi-source architecture](https://github.com/masarray/arfast-sntp/blob/main/docs/MULTI-NTP-ARCHITECTURE.md).
 
