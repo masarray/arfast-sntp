@@ -164,12 +164,13 @@ internal static class LinuxWorker
                     }
                     var median = samples.OrderBy(s => s.Offset.Ticks).ElementAt(1);
                     selected = peer.Address;
+                    DateTimeOffset acceptedServerTime = DateTimeOffset.UtcNow + candidate.Value;
                     state = "Synchronized";
                     if (!monitorOnly && candidate.Value.Duration() > TimeSpan.FromMilliseconds(100))
                     {
                         try
                         {
-                            LinuxClock.SetUtc(DateTimeOffset.UtcNow + candidate.Value);
+                            LinuxClock.SetUtc(acceptedServerTime);
                             corrected = DateTimeOffset.UtcNow;
                             lastEvent = corrected.Value.ToString("O") + " | Clock corrected from " +
                                 peer.Address;
@@ -183,7 +184,7 @@ internal static class LinuxWorker
                     }
                     results.Add(new PeerResult(peer.Address, true, state,
                         candidate.Value.TotalMilliseconds, median.RttMs, median.Stratum,
-                        null, DateTimeOffset.UtcNow + candidate.Value));
+                        null, acceptedServerTime));
                     break; // Exactly one active clock writer; avoid competing reference steps.
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
