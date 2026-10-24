@@ -33,13 +33,13 @@ AR Fast SNTP is a free, open-source desktop tool for engineers who want an easie
 2. Open **AR Fast SNTP** from the Start menu.
 3. Watch the server connection and time synchronization status. You can add more servers whenever needed.
 
-No editing of \`ntp.conf\` or manual service restart for each server change.
+No editing of `ntp.conf` or manual service restart for each server change.
 
 **WinGet support is being prepared.** Once the package is accepted into the official community catalog, the command will be:
 
-\`\`\`powershell
+```powershell
 winget install --id masarray.ARFastSNTP --exact --interactive
-\`\`\`
+```
 
 Until then, use the verified [official Windows installer](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe). See [WinGet progress and manifest sources](docs/WINGET.md).
 
@@ -49,9 +49,9 @@ Until then, use the verified [official Windows installer](https://github.com/mas
 
 Linux includes a native SNTP background service and a small Avalonia GUI. On a supported Linux desktop with systemd and polkit, download and extract the release, then run:
 
-\`\`\`bash
+```bash
 sudo sh ./install.sh
-\`\`\`
+```
 
 Open **AR Fast SNTP** from the Applications menu and enter your server IP. Follow the [Linux installation guide](docs/LINUX-INSTALL.md) for the exact package and setup steps.
 
