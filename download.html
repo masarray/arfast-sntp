@@ -1,41 +1,41 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0e14"><meta name="color-scheme" content="dark">
-<meta name="description" content="Download AR Fast SNTP for Windows x64, verify the SHA-256 checksum, and see installation precautions.">
+<meta name="description" content="Download AR Fast SNTP or Linux. Enter your NTP/SNTP server IP and get started.">
 
 <link rel="canonical" href="https://masarray.github.io/arfast-sntp/download.html">
 <meta name="robots" content="index,follow">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AR Fast SNTP">
 <meta property="og:title" content="Download AR Fast SNTP for Windows">
-<meta property="og:description" content="One official Inno Setup EXE, SHA-256 checksum and transparent safety notes.">
+<meta property="og:description" content="One Windows installer, plus an experimental Linux build. Free and open source.">
 <meta property="og:url" content="https://masarray.github.io/arfast-sntp/download.html">
 <meta property="og:image" content="https://masarray.github.io/arfast-sntp/assets/screenshot/Screenshot%202026-10-11%20073259.webp">
 <meta property="og:image:alt" content="Actual AR Fast SNTP Studio with two NTP sources and expanded event history">
 <meta name="twitter:card" content="summary_large_image">
-<title>Download AR Fast SNTP — Official Windows Installer</title><link rel="icon" href="assets/favicon/favicon.ico" sizes="any">
+<title>Download AR Fast SNTP — Windows and Linux</title><link rel="icon" href="assets/favicon/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png"><link rel="apple-touch-icon" href="assets/favicon/apple-touch-icon.png">
 <link rel="manifest" href="assets/favicon/site.webmanifest"><link rel="stylesheet" href="site.css"><script defer src="release.js"></script></head><body><a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header"><div class="shell header-inner"><a class="brand" href="./"><img src="assets/favicon/android-chrome-192x192.png" width="30" height="30" alt="">AR Fast SNTP</a>
 <nav class="nav" aria-label="Main"><a href="./">Overview</a><a href="./#screenshots">Screenshots</a><a href="https://github.com/masarray/arfast-sntp#readme">Documentation</a><a href="download.html" aria-current="page" class="nav-download">Download</a></nav></div></header>
 <main class="shell" id="main">
-<div class="page-heading"><p class="eyebrow">Official Windows x64 release</p><h1>Download <span>AR Fast SNTP.</span></h1><p class="lead">Official Windows installer from GitHub Releases, with a SHA-256 file for integrity checks. No mirrors, ad-supported downloaders or third-party installers.</p></div>
+<div class="page-heading"><p class="eyebrow">Start with your NTP server IP</p><h1>Download <span>AR Fast SNTP.</span></h1><p class="lead">Choose your platform, install AR Fast SNTP, enter the IP address of your time server, and see the sync status. Free and open source.</p></div>
 <div class="download-grid"><section class="download-panel" aria-labelledby="release">
 <div class="release-meta"><span class="pill">Public release</span><span data-release-version>Latest version</span><span>Windows x64</span></div>
-<h2 id="release">AR Fast SNTP Installer</h2><p>One Inno Setup package including Avalonia Studio and the Windows background service. Fast source confirmation and network-aware recovery are included. The executable is unsigned and requires administrator approval to install the service.</p>
+<h2 id="release">AR Fast SNTP Installer</h2><p>Includes the desktop Studio and background service. During setup, enter your SNTP server IP. After installation, open AR Fast SNTP to see the connection and time sync status.</p>
 <a class="btn primary" href="https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe" data-release-asset="installer">Download for Windows x64 <span aria-hidden="true">↓</span></a>
 <a class="btn secondary" href="https://github.com/masarray/arfast-sntp/releases/latest" data-release-notes>View release notes</a>
 <div class="checksums"><h3>Verify before running</h3><p>Download the <a href="https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe.sha256" data-release-asset="checksum">SHA-256 checksum file</a>, then compare its digest with:</p>
 <pre><code>Get-FileHash .\ARFastSNTP-Setup-Windows-x64.exe -Algorithm SHA256</code></pre>
 <p class="micro">Use <a href="https://github.com/masarray/arfast-sntp/releases">all releases</a> for version history. Each GitHub Release records its verified source commit, installer, and checksum. <span data-release-size></span></p>
 </div></section>
-<aside class="info-panel"><h2>Before installing</h2>
-<ul><li><strong>Test PC only.</strong> No live SCADA, SOE or historian deployments.</li>
-<li>Provide a reachable IPv4 unicast NTP server on UDP port 123.</li>
-<li><strong>Clock correction is enabled by normal setup.</strong> For monitor-only testing, launch with <code>/LABSYNC=0</code>.</li>
-<li>SmartScreen may warn about this unsigned release. Check the GitHub source and SHA-256; never disable security protections solely to install.</li>
-<li>To uninstall, use Windows Settings → Installed apps → AR Fast SNTP.</li>
-</ul><p>Found a problem? Open a <a href="https://github.com/masarray/arfast-sntp/issues">GitHub issue</a> with redacted diagnostics and environment details.</p>
+<aside class="info-panel"><h2>Quick start</h2>
+<ol><li>Download the Windows installer and run it as administrator.</li>
+<li>Enter your GPS/NTP server IPv4 address during setup.</li>
+<li>Open AR Fast SNTP and watch your clock synchronization status.</li></ol>
+<p><strong>Linux x64 beta:</strong> <a href="https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1">Download Linux</a> and follow the <a href="https://github.com/masarray/arfast-sntp/blob/main/docs/LINUX-INSTALL.md">quick setup guide</a>.</p>
+<p><strong>WinGet:</strong> package manifest and publishing workflow are <a href="https://github.com/masarray/arfast-sntp/blob/main/docs/WINGET.md">being prepared</a>; the official catalog command will be available once approved.</p>
+<p class="micro">Use a PC where you are authorized to change system time. The Windows installer is currently unsigned; verify the official GitHub release and checksum. <a href="https://github.com/masarray/arfast-sntp/blob/main/SUPPORT.md">Installation help</a>.</p>
 </aside></div>
 <section class="download-screenshot" aria-label="Actual Windows Studio preview"><div><h2>See the application before installing.</h2><p>This is a real screenshot of the Avalonia Studio included in the installer.</p></div><a href="assets/screenshot/Screenshot%202026-10-11%20073259.webp" target="_blank" rel="noopener" aria-label="View full-size real AR Fast SNTP Studio screenshot"><img src="assets/screenshot/Screenshot%202026-10-11%20073259.webp" width="920" height="600" loading="lazy" decoding="async" alt="Actual Windows Studio showing time source health and expanded Status History."></a></section>
 </main>
