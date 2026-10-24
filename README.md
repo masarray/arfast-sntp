@@ -39,7 +39,7 @@ No editing of `ntp.conf` or manual service restart for each server change.
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/masarray/arfast-sntp/main/tools/install-windows.ps1 -OutFile install-arfast.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\\install-arfast.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-arfast.ps1
 ```
 
 The helper checks the Windows installer SHA-256 against the published release before opening the usual setup wizard. You can read the script first: [tools/install-windows.ps1](tools/install-windows.ps1).
