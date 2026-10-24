@@ -1,3 +1,11 @@
+# Historical engineering draft — Windows product plan
+
+This is an archived planning document from an earlier project milestone. It is preserved for contributors, not intended as a current setup guide.
+
+For current use: [quick-start guide](../QUICK-START.md) · [project README](../../README.md) · [official releases](https://github.com/masarray/arfast-sntp/releases)
+
+---
+
 # AR Fast SNTP — Windows-first product migration plan
 
 **Decision:** Windows x64 only until a complete Install -> Sync -> Monitor

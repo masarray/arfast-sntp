@@ -1,3 +1,11 @@
+# Historical engineering draft — GUI and background service plan
+
+This is an archived planning document from an earlier project milestone. It is preserved for contributors, not intended as a current setup guide.
+
+For current use: [quick-start guide](../QUICK-START.md) · [project README](../../README.md) · [official releases](https://github.com/masarray/arfast-sntp/releases)
+
+---
+
 # Lightweight Windows SNTP dashboard and daemon architecture
 
 The Windows daemon and GUI must be separate processes: synchronization must continue when the dashboard is closed.

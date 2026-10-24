@@ -1,23 +1,32 @@
-# Support and troubleshooting
+# Help and troubleshooting
 
-**Use [GitHub Issues](https://github.com/masarray/arfast-sntp/issues) for reproducible bugs and feature requests**, and [GitHub Releases](https://github.com/masarray/arfast-sntp/releases/latest) to obtain the official installer. See [SECURITY.md](SECURITY.md) for private vulnerability disclosure instead of publicly reporting an exploitable security issue.
+**Need a hand getting your computer synchronized?** Start with the [quick-start guide](docs/QUICK-START.md), which uses actual screenshots from AR Fast SNTP.
 
-## Before filing a bug
+## Quick checks
 
-1. State the exact GitHub Release tag, Windows build and whether you installed in normal synchronization or `/LABSYNC=0` monitor-only mode.
-2. Identify the relevant scenario: startup, all sources OFF, source ON, DNS/UDP failure, cable LAN unplug/replug, sleep/resume, upgrade or uninstall.
-3. Report the expected behavior, the observed behavior, and approximate elapsed time. If possible, include a redacted screenshot of the actual Avalonia Studio.
-4. Export the bounded decision/status diagnostics and attach only after removing private addresses, hostnames, site identifiers and sensitive timestamps.
-5. If an installer issue, include only **redacted** entries from `%ProgramData%\ARFastSNTP\setup.log`; never post complete system, site or security event logs to a public issue.
+| What you see | What to try |
+|---|---|
+| **No reply** | Confirm the server IP is correct, reachable, and responds to NTP requests on UDP port 123 |
+| **Server not selected** | Check whether the server is enabled and returning valid NTP time |
+| **Clock not updating** | Check that AR Fast SNTP was installed with synchronization enabled and the PC allows time adjustments |
+| **Network reconnected** | Check the selected source and Status History after the adapter reconnects |
+| **Adding a new server** | Use Add in Studio; changing servers does not require reinstalling the app |
 
-The service listens for replies to IPv4 UDP port 123 and validates NTP packets. A “No reply” from a source is not necessarily an application bug—check network routes, firewall rules and whether the remote endpoint replies to the Windows UDP socket.
+## Found a bug or have an idea?
 
-## Scope and safety
+[Open a GitHub issue](https://github.com/masarray/arfast-sntp/issues/new/choose) with the release version, operating system, what you tried, and what happened. A screenshot is often enough to explain the problem.
 
-Use a disposable or authorized **test/commissioning Windows PC** for intentional clock corrections. Changing the date can disturb certificates, authentication, logging and running applications. Do not test clock stepping on active SCADA, SOE, historian or other production timing systems.
+Please hide private IP addresses, hostnames, and workplace identifiers in public reports. For confidential security reports, follow [SECURITY.md](SECURITY.md).
 
-No guaranteed response SLA, commercial support plan, 24/7 incident coverage or industrial time accuracy certification is offered. Extended technical constraints are recorded in [PROJECT-STATUS.md](docs/PROJECT-STATUS.md) and [Issue #2](https://github.com/masarray/arfast-sntp/issues/2).
+## Downloads and updates
 
-## Integrity
+Get the [latest Windows installer](https://github.com/masarray/arfast-sntp/releases/latest) or the [Linux x64 beta](https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1). Official Windows downloads include a SHA-256 file if you want to verify the installer.
 
-The installer is unsigned. Download only from GitHub Releases and compare its SHA-256 to the accompanying checksum. That checksum detects corruption or substitution relative to the published file but is **not proof of software publisher identity**.
+## More detail
+
+- [Beginner quick start](docs/QUICK-START.md)
+- [Linux setup and service checks](docs/LINUX-INSTALL.md)
+- [Windows architecture](docs/MULTI-NTP-ARCHITECTURE.md)
+- [Engineering roadmap](docs/ENGINEERING-ROADMAP.md)
+
+AR Fast SNTP adjusts the computer clock when synchronization is enabled. Try clock-changing experiments on a computer you control, rather than a system that depends on uninterrupted timekeeping.
