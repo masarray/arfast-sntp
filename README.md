@@ -1,105 +1,92 @@
 <p align="center">
-  <img src="assets/favicon/android-chrome-192x192.png" width="72" alt="AR Fast SNTP">
+  <img src="assets/favicon/android-chrome-192x192.png" width="72" alt="AR Fast SNTP app icon">
 </p>
 
 <h1 align="center">AR Fast SNTP</h1>
 <p align="center"><strong>Time synchronization should be simple.</strong></p>
-<p align="center">Enter your NTP/SNTP server IP address. Let the application handle the rest.</p>
+<p align="center">Install the app, enter your SNTP server IP address, and let it synchronize your computer clock.</p>
 
 <p align="center">
+  <a href="https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe"><strong>Download for Windows</strong></a> ·
+  <a href="https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1">Linux beta</a> ·
   <a href="https://masarray.github.io/arfast-sntp/">Website</a> ·
-  <a href="https://masarray.github.io/arfast-sntp/download.html">Download</a> ·
-  <a href="https://github.com/masarray/arfast-sntp/releases">All releases</a> ·
-  <a href="SUPPORT.md">Help</a>
+  <a href="docs/QUICK-START.md">Quick start</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/masarray/arfast-sntp/actions/workflows/windows-ci.yml"><img alt="Windows CI" src="https://github.com/masarray/arfast-sntp/actions/workflows/windows-ci.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/masarray/arfast-sntp/actions/workflows/linux-release.yml"><img alt="Linux CI" src="https://github.com/masarray/arfast-sntp/actions/workflows/linux-release.yml/badge.svg?branch=main"></a>
-  <a href="https://github.com/masarray/arfast-sntp/releases/latest"><img alt="Latest Windows release" src="https://img.shields.io/github/v/release/masarray/arfast-sntp?label=Windows"></a>
+  <a href="https://github.com/masarray/arfast-sntp/releases/latest"><img alt="Latest Windows release" src="https://img.shields.io/github/v/release/masarray/arfast-sntp?label=Windows%20stable"></a>
 </p>
 
-AR Fast SNTP is a free, open-source desktop tool for engineers who want an easier way to synchronize a computer clock with an SNTP server. It was built around real HMI server and workstation testing, but it is also useful for learning and troubleshooting time synchronization on a regular PC.
+AR Fast SNTP is a **free, open-source time synchronization app** for Windows engineering PCs, industrial HMIs, workstations, and anyone learning how SNTP works. A Linux desktop beta is also available.
 
-**Built for electrical engineers, automation engineers, SCADA/HMI engineers, students, and curious PC users.**
+**No editing `ntp.conf`. No repeated service restarts. Just your server IP address.**
 
-## Get started
+## See the app
 
-### Windows x64
+<p align="center">
+  <a href="assets/screenshot/Screenshot%202026-10-11%20073259.webp">
+    <img src="assets/screenshot/Screenshot%202026-10-11%20073259.webp" width="860" alt="AR Fast SNTP Windows Studio showing selected NTP time sources, status, offsets and connection history">
+  </a>
+</p>
+<p align="center"><sub>Actual Windows Studio screenshot from this repository.</sub></p>
 
-**[Download Windows installer](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe)**
+| Add a time server | Check synchronization status |
+|---|---|
+| <a href="assets/screenshot/Screenshot%202026-10-11%20072931.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072931.webp" width="420" alt="Add NTP Server dialog with an IP address field"></a> | <a href="assets/screenshot/Screenshot%202026-10-11%20072958.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072958.webp" width="420" alt="AR Fast SNTP displaying time server health"></a> |
 
-1. Run the installer. Enter the IP address of your NTP/SNTP server.
-2. Open **AR Fast SNTP** from the Start menu.
-3. Watch the server connection and time synchronization status. You can add more servers whenever needed.
+[See how to remove a server](assets/screenshot/Screenshot%202026-10-11%20073230.webp) · [View all original screenshots](assets/screenshot)
 
-No editing of `ntp.conf` or manual service restart for each server change.
+## Get started in three steps
 
-**Prefer the command line?** You can download the official checksum-verifying installer helper and run it from PowerShell:
+1. **Install:** [Download the Windows x64 installer](https://github.com/masarray/arfast-sntp/releases/latest/download/ARFastSNTP-Setup-Windows-x64.exe) and run setup.
+2. **Enter your server IP:** Use the IPv4 address of your GPS-based NTP server or another trusted NTP/SNTP server.
+3. **Done:** Open **AR Fast SNTP** and see the selected server, synchronization status, offset, and response time.
+
+The synchronization service keeps running even when the app window is closed. You can add, enable, disable, or remove servers directly in Studio.
+
+**New to SNTP?** The [beginner's quick-start guide](docs/QUICK-START.md) explains what server IP to enter, how to check the result, and a few easy troubleshooting tips.
+
+### Prefer a command line?
+
+On Windows, this optional PowerShell helper downloads the official installer and checks its SHA-256 before starting setup:
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/masarray/arfast-sntp/main/tools/install-windows.ps1 -OutFile install-arfast.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-arfast.ps1
 ```
 
-The helper checks the Windows installer SHA-256 against the published release before opening the usual setup wizard. You can read the script first: [tools/install-windows.ps1](tools/install-windows.ps1).
+### Linux desktop beta
 
-### Linux x64
+[Download AR Fast SNTP for Linux x64](https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1). It includes a desktop UI and a background SNTP service. Extract the Linux package and follow the [Linux setup guide](docs/LINUX-INSTALL.md).
 
-**[Download Linux beta](https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1)**
+## What can you do with AR Fast SNTP?
 
-Linux includes a native SNTP background service and a small Avalonia GUI. On a supported Linux desktop with systemd and polkit, download and extract the release, then run:
-
-```bash
-sudo sh ./install.sh
-```
-
-Open **AR Fast SNTP** from the Applications menu and enter your server IP. Follow the [Linux installation guide](docs/LINUX-INSTALL.md) for the exact package and setup steps.
-
-## See it in action
-
-<p align="center">
-  <a href="assets/screenshot/Screenshot%202026-10-11%20073259.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20073259.webp" width="880" alt="Actual AR Fast SNTP Windows Studio showing server status, round-trip time and history"></a>
-</p>
-
-| Add a server | Check the result |
+| Feature | What it means for you |
 |---|---|
-| <a href="assets/screenshot/Screenshot%202026-10-11%20072931.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072931.webp" width="430" alt="Enter an NTP server IP address"></a> | <a href="assets/screenshot/Screenshot%202026-10-11%20072958.webp"><img src="assets/screenshot/Screenshot%202026-10-11%20072958.webp" width="430" alt="Monitor multiple NTP servers and their connection status"></a> |
+| **Simple server setup** | Enter an IPv4 SNTP server address instead of editing NTP configuration files |
+| **Automatic synchronization** | Let the background service handle time updates |
+| **Network recovery** | The Windows service reconnects and verifies sources after network changes |
+| **Clear status** | See the selected server, offset, response delay (RTT), and events |
+| **Multiple time servers** | Add and manage up to 16 IPv4 servers in Windows Studio |
+| **Free and open source** | Use it, learn from it, and contribute on GitHub |
 
-[Remove a time source](assets/screenshot/Screenshot%202026-10-11%20073230.webp) · [All original screenshots](assets/screenshot)
+### Built from real engineering experience
 
-## Why AR Fast SNTP?
+I originally built AR Fast SNTP after spending too much time troubleshooting slow and inconsistent Windows time synchronization on industrial HMI computers.
 
-- **IP address first.** Choose a GPS-referenced local NTP server or a public NTP server reachable on UDP port 123.
-- **Always-on service.** Synchronization runs in the background after the UI is closed.
-- **Automatic recovery.** The Windows app reacts to network interruptions and new connections.
-- **Clear status.** See which server is selected, offset, round-trip time, and recent events.
-- **Multiple sources.** Windows Studio supports up to 16 IPv4 server addresses, with individual enable/disable controls.
-- **Free and open source.** Learn how it works, inspect the code, and contribute.
+In tests with **four Windows HMI computers (two servers and two workstations)**, clock correction was observed in around **one second**. After reconnecting the LAN, synchronization recovered in approximately **six seconds**. These are results from those tests, rather than a promised time for every network.
 
-During engineering tests on four Windows HMI computers, initial correction was observed in around one second and recovery after LAN reconnection in around six seconds. These are results from that test environment; timings vary with server and network conditions.
+The goal is still the same: **let the application handle the complexity, not the engineer.**
 
-## What server IP should I enter?
+## Help and development
 
-Use the IPv4 address of an NTP/SNTP server reachable from your PC.
+- [Quick start & common questions](docs/QUICK-START.md) · [Support](SUPPORT.md)
+- [Windows stable release](https://github.com/masarray/arfast-sntp/releases/latest) · [Linux beta](https://github.com/masarray/arfast-sntp/releases/tag/linux-v0.1.0-beta.1)
+- [Windows SNTP architecture](docs/MULTI-NTP-ARCHITECTURE.md) · [Linux service & setup](docs/LINUX-INSTALL.md)
+- [Release history](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-- **Industrial lab:** Enter the IP address of your GPS-referenced NTP server.
-- **Home/office experiment:** Try a public NTP server IPv4 address published by a trusted time-service provider.
+Built with C#/.NET 8 and Avalonia. Use AR Fast SNTP on a computer where you are allowed to adjust the clock. Download the installer from the official [GitHub Releases](https://github.com/masarray/arfast-sntp/releases) page; a checksum is provided for verification.
 
-The client *requests* the time from the server; the server does not have to broadcast anything. Only use sources you trust and are permitted to access.
-
-## For developers and advanced users
-
-This project uses **C# / .NET 8**, **Avalonia** and SNTPv4 over IPv4.
-
-- [Windows architecture and source selection](docs/MULTI-NTP-ARCHITECTURE.md)
-- [Linux install and service reference](docs/LINUX-INSTALL.md)
-- [WinGet manifest and publishing workflow](docs/WINGET.md)
-- [Release notes and changelog](CHANGELOG.md)
-- [Help and troubleshooting](SUPPORT.md)
-- [Security and responsible usage](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-
-Use a PC where you are authorized to adjust the system clock; time changes can affect other applications. For production-critical time systems, follow your site's tested time synchronization design. Installers and checksums are available in [GitHub Releases](https://github.com/masarray/arfast-sntp/releases). The Windows installer is currently unsigned; the GitHub release includes a checksum.
-
-Licensed under [GPL-2.0-or-later](LICENSE). See [NOTICE](NOTICE).
+Licensed under [GPL-2.0-or-later](LICENSE). Third-party notices are in [NOTICE](NOTICE).
