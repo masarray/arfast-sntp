@@ -92,12 +92,15 @@ if not (ROOT / "LICENSE").read_text(encoding="utf-8").strip().startswith(
 for needed in ("SECURITY.md", "CONTRIBUTING.md", "sitemap.xml", "robots.txt", ".nojekyll"):
     if not (ROOT / needed).is_file():
         failures.append(f"missing public governance/site file: {needed}")
-if "masarray/arintp" in (ROOT / "HANDOFF.md").read_text(encoding="utf-8"):
-    failures.append("current root HANDOFF still references obsolete repository")
+if (ROOT / "HANDOFF.md").exists():
+    failures.append("historical maintainer handoff should not be in the repository root")
+for needed in ("docs/QUICK-START.md", "docs/LINUX-INSTALL.md"):
+    if not (ROOT / needed).is_file():
+        failures.append(f"missing user setup guide: {needed}")
 
 if failures:
     for error in failures:
         print("FAIL:", error)
     raise SystemExit(1)
 print(f"PASS: {len(PAGES)} HTML pages, {len(SHOTS)} WebP screenshots, release links, "
-      "license, current handoff and governance.")
+      "license, user guides and governance.")

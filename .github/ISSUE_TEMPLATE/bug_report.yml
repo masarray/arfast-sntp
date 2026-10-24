@@ -1,39 +1,40 @@
 name: Bug report
-description: Reproducible defects, not security vulnerabilities
+description: Tell us what happened so we can help improve AR Fast SNTP
 title: "[Bug] "
 body:
   - type: markdown
     attributes:
-      value: "Redact private site IPs, machine identifiers and secrets. Never test clock changes on production SCADA/SOE machines. For security vulnerabilities follow SECURITY.md."
+      value: "Thanks for trying AR Fast SNTP! Please remove personal or private network information from screenshots and logs. For security issues, see SECURITY.md."
   - type: input
     id: version
     attributes:
-      label: Version / commit SHA
-      placeholder: "v0.10.3"
+      label: AR Fast SNTP version
+      description: Find it on the GitHub release you downloaded.
+      placeholder: "e.g. v0.10.4"
     validations:
       required: true
   - type: input
-    id: windows
+    id: environment
     attributes:
-      label: Windows environment / display scale
-      placeholder: "Windows 11 x64, 125% scaling"
+      label: Operating system
+      placeholder: "e.g. Windows 11 x64, or Ubuntu desktop x64"
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Steps to reproduce
-      placeholder: "1. ... 2. ... 3. ..."
+      label: How can we reproduce this?
+      placeholder: "1. Open AR Fast SNTP\n2. Add a server IP\n3. ..."
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
-      label: Expected vs observed
+      label: What did you expect, and what happened?
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Redacted logs or screenshots
-      description: "Remove private topology and identifying details."
+      label: Screenshot or error message (optional)
+      description: Please hide private IP addresses, hostnames, and site details.

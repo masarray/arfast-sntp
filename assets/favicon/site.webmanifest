@@ -1,7 +1,7 @@
 {
   "name": "AR Fast SNTP",
   "short_name": "AR Fast SNTP",
-  "description": "Windows SNTP monitoring and synchronization for commissioning PCs",
+  "description": "Simple SNTP time synchronization for Windows engineering PCs",
   "icons": [
     {
       "src": "web-app-manifest-192x192.png",
