@@ -1,0 +1,158 @@
+name: Linux candidate and prerelease
+
+# Isolated from the accepted Windows CI and Windows stable publisher.
+# Before any Linux package can exist, the Linux host, integration tests,
+# cross-platform Studio and installation guide must actually be implemented.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/ARFastSNTP.Linux/**'
+      - 'src/ARFastSNTP.LinuxStudio/**'
+      - 'tests/ARFastSNTP.Linux.Tests/**'
+      - 'packaging/linux/**'
+      - 'docs/LINUX-INSTALL.md'
+      - '.github/workflows/linux-release.yml'
+  push:
+    branches: [main, 'feat/linux-release-workflow-preflight']
+    tags: ['linux-v*']
+    paths:
+      - 'src/ARFastSNTP.Linux/**'
+      - 'src/ARFastSNTP.LinuxStudio/**'
+      - 'tests/ARFastSNTP.Linux.Tests/**'
+      - 'packaging/linux/**'
+      - 'docs/LINUX-INSTALL.md'
+      - '.github/workflows/linux-release.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Refuse a GUI-only or Windows-only Linux release
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Avalonia alone is cross-platform; the existing host, Windows
+          # SetSystemTime and ACL-only named-pipe control are not.
+          test -s src/ARFastSNTP.Linux/ARFastSNTP.Linux.csproj || {
+            echo 'Linux runtime/clock host has not been implemented.' >&2
+            exit 1
+          }
+          test -s tests/ARFastSNTP.Linux.Tests/ARFastSNTP.Linux.Tests.csproj || {
+            echo 'Linux-specific integration tests are required before release.' >&2
+            exit 1
+          }
+          test -s docs/LINUX-INSTALL.md || {
+            echo 'Document Linux permissions, installation and service lifecycle first.' >&2
+            exit 1
+          }
+          test -s src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj
+          grep -Fq '<TargetFramework>net8.0</TargetFramework>' src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj
+          test -s packaging/linux/install.sh
+          test -s packaging/linux/arfast-sntp.service
+          test -s packaging/linux/arfast-sntp.desktop
+          if [[ "$GITHUB_REF" == refs/tags/linux-v* ]]; then
+            git fetch origin main
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+              echo 'Refusing tag from source not merged into main.' >&2
+              exit 1
+            }
+          fi
+
+      - name: Build Linux host and Avalonia Studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build src/ARFastSNTP.Linux/ARFastSNTP.Linux.csproj -c Release --warnaserror
+          dotnet build src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj -c Release --warnaserror
+
+      - name: Linux integration regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The dedicated Linux harness must fail for missing peer control,
+          # UDP SNTP behavior, monitoring or clock-correction authorization.
+          # No privileged clock steps should occur on a shared CI runner.
+          dotnet run --project tests/ARFastSNTP.Linux.Tests/ARFastSNTP.Linux.Tests.csproj -c Release
+
+      - name: Publish self-contained Linux x64 packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish src/ARFastSNTP.Linux/ARFastSNTP.Linux.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/worker
+          dotnet publish src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/studio
+          test -x dist/worker/ARFastSNTP.Linux
+          test -x dist/studio/ARFastSNTP.LinuxStudio
+          file -b dist/worker/ARFastSNTP.Linux | grep -q ELF
+          file -b dist/studio/ARFastSNTP.LinuxStudio | grep -q ELF
+          cp docs/LINUX-INSTALL.md dist/README-LINUX.md
+          cp packaging/linux/install.sh packaging/linux/arfast-sntp.service packaging/linux/arfast-sntp.desktop dist/
+          mkdir -p release-assets
+          tar -czf release-assets/ARFastSNTP-Linux-x64.tar.gz -C dist .
+          (cd release-assets && sha256sum ARFastSNTP-Linux-x64.tar.gz > ARFastSNTP-Linux-x64.tar.gz.sha256)
+
+      - name: Upload Linux candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARFastSNTP-Linux-x64-candidate
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/linux-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: linux
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ARFastSNTP-Linux-x64-candidate
+          path: release-assets
+      - name: Publish separate Linux prerelease from reviewed tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            tag="linux-v0.1.0-beta.1"
+          fi
+          [[ "$tag" =~ ^linux-v[0-9]+[.][0-9]+[.][0-9]+(-[a-zA-Z0-9.-]+)?$ ]] || {
+            echo 'Use a linux-vX.Y.Z tag.' >&2
+            exit 1
+          }
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Refusing to mutate an existing release.' >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            target_arg=(--verify-tag)
+          else
+            target_arg=(--target "$GITHUB_SHA")
+          fi
+          gh release create "$tag" release-assets/ARFastSNTP-Linux-x64.tar.gz release-assets/ARFastSNTP-Linux-x64.tar.gz.sha256 \
+            --repo "$GITHUB_REPOSITORY" "${target_arg[@]}" --prerelease --latest=false \
+            --title "AR Fast SNTP $tag — experimental Linux x64" \
+            --notes "Experimental Linux build for authorized engineering and lab testing only. Review README-LINUX.md. Not validated for production SCADA/SOE timing."

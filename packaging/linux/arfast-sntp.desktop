@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=AR Fast SNTP
+Comment=SNTP time sync for engineering PCs
+Exec=/opt/arfast-sntp/studio/ARFastSNTP.LinuxStudio
+Terminal=false
+Categories=Utility;Network;
