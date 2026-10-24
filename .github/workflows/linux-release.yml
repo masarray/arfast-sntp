@@ -5,9 +5,24 @@ name: Linux candidate and prerelease
 # cross-platform Studio and installation guide must actually be implemented.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/ARFastSNTP.Linux/**'
+      - 'src/ARFastSNTP.LinuxStudio/**'
+      - 'tests/ARFastSNTP.Linux.Tests/**'
+      - 'packaging/linux/**'
+      - 'docs/LINUX-INSTALL.md'
+      - '.github/workflows/linux-release.yml'
   push:
-    tags:
-      - 'linux-v*'
+    branches: [main, 'feat/linux-release-workflow-preflight']
+    tags: ['linux-v*']
+    paths:
+      - 'src/ARFastSNTP.Linux/**'
+      - 'src/ARFastSNTP.LinuxStudio/**'
+      - 'tests/ARFastSNTP.Linux.Tests/**'
+      - 'packaging/linux/**'
+      - 'docs/LINUX-INSTALL.md'
+      - '.github/workflows/linux-release.yml'
 
 permissions:
   contents: read
@@ -49,10 +64,11 @@ jobs:
             echo 'Document Linux permissions, installation and service lifecycle first.' >&2
             exit 1
           }
-          grep -Eq '<TargetFramework>net8[.]0</TargetFramework>' src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj || {
-            echo 'Studio must be retargeted from net8.0-windows to portable net8.0.' >&2
-            exit 1
-          }
+          test -s src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj
+          grep -Fq '<TargetFramework>net8.0</TargetFramework>' src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj
+          test -s packaging/linux/install.sh
+          test -s packaging/linux/arfast-sntp.service
+          test -s packaging/linux/arfast-sntp.desktop
           if [[ "$GITHUB_REF" == refs/tags/linux-v* ]]; then
             git fetch origin main
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
@@ -66,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet build src/ARFastSNTP.Linux/ARFastSNTP.Linux.csproj -c Release --warnaserror
-          dotnet build src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release --warnaserror
+          dotnet build src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj -c Release --warnaserror
 
       - name: Linux integration regression
         shell: bash
@@ -82,12 +98,13 @@ jobs:
         run: |
           set -euo pipefail
           dotnet publish src/ARFastSNTP.Linux/ARFastSNTP.Linux.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/worker
-          dotnet publish src/ARFastSNTP.Studio/ARFastSNTP.Studio.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/studio
+          dotnet publish src/ARFastSNTP.LinuxStudio/ARFastSNTP.LinuxStudio.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o dist/studio
           test -x dist/worker/ARFastSNTP.Linux
-          test -x dist/studio/ARFastSNTP.Studio
+          test -x dist/studio/ARFastSNTP.LinuxStudio
           file -b dist/worker/ARFastSNTP.Linux | grep -q ELF
-          file -b dist/studio/ARFastSNTP.Studio | grep -q ELF
+          file -b dist/studio/ARFastSNTP.LinuxStudio | grep -q ELF
           cp docs/LINUX-INSTALL.md dist/README-LINUX.md
+          cp packaging/linux/install.sh packaging/linux/arfast-sntp.service packaging/linux/arfast-sntp.desktop dist/
           mkdir -p release-assets
           tar -czf release-assets/ARFastSNTP-Linux-x64.tar.gz -C dist .
           (cd release-assets && sha256sum ARFastSNTP-Linux-x64.tar.gz > ARFastSNTP-Linux-x64.tar.gz.sha256)
@@ -101,7 +118,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/linux-v')
+    if: startsWith(github.ref, 'refs/tags/linux-v') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: linux
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -118,7 +135,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            tag="linux-v0.1.0-beta.1"
+          fi
           [[ "$tag" =~ ^linux-v[0-9]+[.][0-9]+[.][0-9]+(-[a-zA-Z0-9.-]+)?$ ]] || {
             echo 'Use a linux-vX.Y.Z tag.' >&2
             exit 1
@@ -127,7 +147,12 @@ jobs:
             echo 'Refusing to mutate an existing release.' >&2
             exit 1
           fi
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            target_arg=(--verify-tag)
+          else
+            target_arg=(--target "$GITHUB_SHA")
+          fi
           gh release create "$tag" release-assets/ARFastSNTP-Linux-x64.tar.gz release-assets/ARFastSNTP-Linux-x64.tar.gz.sha256 \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
+            --repo "$GITHUB_REPOSITORY" "${target_arg[@]}" --prerelease --latest=false \
             --title "AR Fast SNTP $tag — experimental Linux x64" \
             --notes "Experimental Linux build for authorized engineering and lab testing only. Review README-LINUX.md. Not validated for production SCADA/SOE timing."
