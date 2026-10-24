@@ -32,6 +32,6 @@ Standard installation permits Windows time correction after source validation. F
 
 The installer is **unsigned**; Windows SmartScreen may warn. Confirm official repository/release origin and SHA-256. Do not disable antivirus, firewall, or Windows policies to bypass warnings.
 
-**Not certified for production SCADA, SOE, historian, GPS reference or other critical timing systems.** Large-step, independent GPS failover, 24-hour soak, code signing and upgrade-rollback certification remain documented under [post-release hardening Issue #2](https://github.com/masarray/arfast-sntp/issues/2). This is an IPv4 unicast SNTP client, not a full RFC 5905 NTP discipline implementation; ARSAS same-host Npcap RAW delivery is not claimed resolved.
+**Not certified for production SCADA, SOE, historian, GPS reference or other critical timing systems.** Large-step, independent GPS failover, 24-hour soak, code signing and upgrade-rollback certification remain documented under [post-release hardening Issue #2](https://github.com/masarray/arfast-sntp/issues/2). This is an IPv4 unicast SNTP client, not a full RFC 5905 NTP discipline implementation; ARSAS same-host raw link-layer delivery is not claimed resolved.
 
 **Source:** https://github.com/masarray/arfast-sntp · **License:** GPL-2.0-or-later (LICENSE/NOTICE included in the installer).

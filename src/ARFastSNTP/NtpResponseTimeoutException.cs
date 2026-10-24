@@ -22,7 +22,7 @@ internal sealed class NtpResponseTimeoutException : IOException
             $"from {remote}; request Tx={Convert.ToHexString(requestTransmit)}. " +
             (local?.Address.Equals(remote.Address) == true
                 ? "Target IP belongs to this PC: local UDP loopback may not receive " +
-                  "a Npcap RAW reply injected on a physical adapter. " +
+                  "a raw link-layer reply injected on a physical adapter. " +
                   "Use a separate NTP server PC or a genuine local UDP/123 listener."
                 : "Match destination IP/port and NTP Originate in packet capture."), inner)
     {

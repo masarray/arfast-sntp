@@ -92,7 +92,7 @@ During engineering tests on four Windows HMI computers, initial correction was o
 Use the IPv4 address of an NTP/SNTP server reachable from your PC.
 
 - **Industrial lab:** Enter the IP address of your GPS-referenced NTP server.
-- **Home/office experiment:** Try a public NTP server IPv4 address from a trusted provider, such as [Google Public NTP](https://developers.google.com/time) or [Cloudflare Time Services](https://developers.cloudflare.com/time-services/).
+- **Home/office experiment:** Try a public NTP server IPv4 address published by a trusted time-service provider.
 
 The client *requests* the time from the server; the server does not have to broadcast anything. Only use sources you trust and are permitted to access.
 

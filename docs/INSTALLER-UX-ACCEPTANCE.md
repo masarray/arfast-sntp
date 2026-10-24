@@ -7,7 +7,7 @@
 - [ ] Hover status shows actual local Windows client IP:UDP source port and
   remote NTP server IP:123 on timeout, for packet-capture correlation.
 - [ ] Confirm raw ARSAS Mode 4 send reaches the UDP receive path rather
-  than merely being transmitted from the same Windows host's Npcap NIC.
+  than merely being transmitted from the same Windows host's raw packet capture NIC.
 - [ ] Synthetic stratum 2/LOCL ARSAS reply parses; unsynchronized LI=3
   cannot be accepted for time correction.
 - [ ] History uses compact time, tooltip retains raw full-resolution event.
@@ -57,7 +57,7 @@ process-name cleanup. Known installer-owned paths:
 A loose binary started manually from `C:\arintp\worker` is NOT a
 known installer-owned service and is **not automatically deleted/killed**.
 Identically named non-project software is never adopted. Third-party
-Windows Time, Meinberg and Siemens services are not silently stopped or
+the built-in system time service and other third-party synchronization services are not silently stopped or
 uninstalled; engineers must avoid competing time authorities.
 
 ## Rollback contract
