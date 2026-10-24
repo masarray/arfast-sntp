@@ -1,0 +1,82 @@
+name: WinGet package validation
+
+# Prepare manifests from immutable Windows release assets. No publish secrets.
+on:
+  pull_request:
+    paths: ['packaging/winget/**', 'tools/winget_manifest.py', '.github/workflows/winget-package.yml']
+  push:
+    branches: [main]
+    paths: ['packaging/winget/**', 'tools/winget_manifest.py', '.github/workflows/winget-package.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winget-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate checked-in WinGet community manifest
+        run: python3 tools/winget_manifest.py --check packaging/winget/manifests/m/masarray/ARFastSNTP/0.10.3
+
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'v'))
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: masarray/arfast-sntp
+      INSTALLER: ARFastSNTP-Setup-Windows-x64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identify official Windows stable release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == release ]]; then
+            tag="$(jq -r '.release.tag_name' "$GITHUB_EVENT_PATH")"
+          else
+            tag="$(gh api "repos/$REPO/releases/latest" --jq '.tag_name')"
+          fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Only stable X.Y.Z tags are supported.' >&2; exit 1; }
+          gh api "repos/$REPO/releases/tags/$tag" >release.json
+          test "$(jq -r '.prerelease' release.json)" = false
+          test "$(jq -r '.draft' release.json)" = false
+          digest="$(jq -er --arg name "$INSTALLER" '.assets[] | select(.name == $name) | .digest' release.json)"
+          [[ "$digest" =~ ^sha256:[a-fA-F0-9]{64}$ ]] || { echo 'Release asset digest is absent.' >&2; exit 1; }
+          echo "VERSION=${tag#v}" >>"$GITHUB_ENV"
+          echo "TAG=$tag" >>"$GITHUB_ENV"
+          echo "EXPECTED=${digest#sha256:}" >>"$GITHUB_ENV"
+
+      - name: Independently verify original Windows EXE
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/$REPO/releases/download/$TAG/$INSTALLER"
+          curl --fail --location --retry 3 --output "$INSTALLER" "$url"
+          curl --fail --location --retry 3 --output "$INSTALLER.sha256" "$url.sha256"
+          actual="$(sha256sum "$INSTALLER" | awk '{print $1}')"
+          [[ "${actual,,}" == "${EXPECTED,,}" ]] || { echo 'GitHub EXE digest mismatch.' >&2; exit 1; }
+          published="$(awk 'NR==1 {print $1}' "$INSTALLER.sha256")"
+          [[ "${actual,,}" == "${published,,}" ]] || { echo 'Checksum file mismatch.' >&2; exit 1; }
+          test "$(stat -c %s "$INSTALLER")" -gt 10000000
+
+      - name: Generate Windows Package Manager manifests
+        run: |
+          python3 tools/winget_manifest.py --version "$VERSION" --sha256 "$EXPECTED" --out-root out/manifests
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ARFastSNTP-WinGet-manifests
+          path: out/manifests/**
+          if-no-files-found: error
+          retention-days: 30
