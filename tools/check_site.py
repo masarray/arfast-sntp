@@ -81,8 +81,8 @@ PUBLIC_DOCS = (
     "docs/RELEASE-NOTES-0.10.4.md",
     "docs/archive/HANDOFF-2026-10-11.md",
 )
-MARKDOWN_LINK = re.compile(r"!?\\[[^\\]\\n]*\\]\\(([^)\\n]+)\\)")
-INLINE_HTML_LINK = re.compile(r'(?:href|src)=[\\x22\\x27]([^\\x22\\x27]+)[\\x22\\x27]')
+MARKDOWN_LINK = re.compile(r'!?\[[^\r\n\]]*\]\(([^)\r\n]+)\)')
+INLINE_HTML_LINK = re.compile(r"""(?:href|src)=["']([^"']+)["']""")
 for filename in PUBLIC_DOCS:
     document = ROOT / filename
     if not document.is_file():
