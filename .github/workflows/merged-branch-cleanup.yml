@@ -1,0 +1,68 @@
+name: Clean merged branches
+
+# GitHub's branch deletion setting is not always enabled on older repositories.
+# Keep only main and unmerged work branches; release tags are never touched.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/merged-branch-cleanup.yml'
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: merged-branch-hygiene
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.repository == 'masarray/arfast-sntp' && (github.event_name == 'push' || github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Remove only verified merged and unchanged PR branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          owner="${REPO%%/*}"
+          removed=0
+          skipped=0
+
+          # No checkout or scripts from a pull request are executed.
+          # Each candidate must be unprotected and match a merged PR's exact
+          # recorded head SHA. A branch with new commits will NOT be deleted.
+          while IFS=$'\t' read -r branch initial_sha; do
+            [[ "$branch" == main || -z "$branch" ]] && continue
+            prs="$(gh api -X GET "repos/$REPO/pulls" \
+              -f state=closed -f "head=$owner:$branch" -f per_page=100)"
+            if ! jq -e --arg repo "$REPO" --arg branch "$branch" --arg sha "$initial_sha" \
+              'any(.[]; .merged_at != null and .head.ref == $branch and .head.sha == $sha and (.head.repo.full_name // "") == $repo)' \
+              <<<"$prs" >/dev/null; then
+              echo "KEEP: $branch (no merged PR at current HEAD)"
+              skipped=$((skipped+1))
+              continue
+            fi
+
+            encoded="$(jq -rn --arg v "$branch" '$v|@uri')"
+            if ! details="$(gh api "repos/$REPO/branches/$encoded" 2>/dev/null)"; then
+              echo "SKIP: $branch already absent"
+              continue
+            fi
+            if [[ "$(jq -r '.protected' <<<"$details")" != false ||
+                  "$(jq -r '.commit.sha' <<<"$details")" != "$initial_sha" ]]; then
+              echo "KEEP: $branch (protected or branch HEAD changed)"
+              skipped=$((skipped+1))
+              continue
+            fi
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$encoded"
+            echo "REMOVED: $branch (verified merged PR)"
+            removed=$((removed+1))
+          done < <(gh api --paginate "repos/$REPO/branches?per_page=100" \
+                    --jq '.[] | select(.protected == false) | [.name, .commit.sha] | @tsv')
+          echo "Branch cleanup completed: removed=$removed; retained=$skipped"
