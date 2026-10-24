@@ -49,6 +49,7 @@ var sample=await NtpProtocol.QueryAsync(IPAddress.Loopback,2026,timeout.Token,po
 await reply;
 Check(sample.Stratum==2 && sample.RttMs>=0 && sample.RttMs<250,"real UDP fixture");
 byte[] req=new byte[48],invalid=new byte[48];
+req[40]=1; // Different transaction ID: should fail originate binding.
 invalid[0]=0x24;invalid[1]=2;
 var t=DateTimeOffset.UtcNow;
 NtpProtocol.WriteTimestamp(invalid.AsSpan(32,8),t);
