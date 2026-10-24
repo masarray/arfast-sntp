@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: masarray.ARFastSNTP
+PackageVersion: 0.10.3
+InstallerType: inno
+Installers:
+  - Architecture: x64
+    Scope: machine
+    InstallerUrl: https://github.com/masarray/arfast-sntp/releases/download/v0.10.3/ARFastSNTP-Setup-Windows-x64.exe
+    InstallerSha256: 6D9E4DDC911E8F6815D30C3F0E5E6AD5C1734E130D783E52E197174D760A47D5
+ManifestType: installer
+ManifestVersion: 1.10.0

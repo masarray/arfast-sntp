@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: masarray.ARFastSNTP
+PackageVersion: 0.10.3
+PackageLocale: en-US
+Publisher: masarray
+PublisherUrl: https://github.com/masarray
+PublisherSupportUrl: https://github.com/masarray/arfast-sntp/issues
+PackageName: AR Fast SNTP
+PackageUrl: https://github.com/masarray/arfast-sntp
+License: GPL-2.0-or-later
+LicenseUrl: https://github.com/masarray/arfast-sntp/blob/main/LICENSE
+Copyright: Copyright (c) AR Fast SNTP contributors
+ShortDescription: Easily synchronize and monitor your Windows PC clock with an SNTP server IP address.
+Description: >-
+  An easy-to-use SNTP time synchronization tool for engineering PCs,
+  industrial HMI workstations, lab computers and everyday Windows testing.
+  Add a trusted NTP server IP address and monitor connection and sync status
+  from the Avalonia desktop application.
+Moniker: arfast-sntp
+Tags:
+  - sntp
+  - ntp
+  - time
+  - synchronization
+  - engineering
+  - automation
+  - scada
+  - hmi
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
