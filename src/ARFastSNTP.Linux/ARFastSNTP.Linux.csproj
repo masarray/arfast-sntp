@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>ARFastSNTP.Linux</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../ARFastSNTP/NtpProtocol.cs" Link="Protocol/NtpProtocol.cs" />
+    <Compile Include="../ARFastSNTP/NtpEra.cs" Link="Protocol/NtpEra.cs" />
+    <Compile Include="../ARFastSNTP/ClockDiscontinuity.cs" Link="Protocol/ClockDiscontinuity.cs" />
+    <Compile Include="../ARFastSNTP/NtpKissOfDeathException.cs" Link="Protocol/NtpKissOfDeathException.cs" />
+    <Compile Include="../ARFastSNTP/NtpInvalidResponseException.cs" Link="Protocol/NtpInvalidResponseException.cs" />
+    <Compile Include="../ARFastSNTP/NtpResponseTimeoutException.cs" Link="Protocol/NtpResponseTimeoutException.cs" />
+    <InternalsVisibleTo Include="ARFastSNTP.Linux.Tests" />
+  </ItemGroup>
+</Project>
