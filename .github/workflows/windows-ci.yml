@@ -20,6 +20,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Verify repository-neutral terminology
+        shell: pwsh
+        run: |
+          python tools/check_vendor_neutrality.py
+          if ($LASTEXITCODE -ne 0) { throw 'Vendor neutrality check failed' }
       - name: Build worker, regression harness, GUI and setup
         shell: pwsh
         run: |

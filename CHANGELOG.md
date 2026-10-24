@@ -2,11 +2,14 @@
 
 All notable **public Windows releases** are listed here. The single Inno Setup installer and its SHA-256 file are published on the [GitHub Releases page](https://github.com/masarray/arfast-sntp/releases). Historical binary assets are never overwritten to incorporate later commits.
 
-## Unreleased — repository maintenance
+## [v0.10.4](https://github.com/masarray/arfast-sntp/releases/tag/v0.10.4) — 2026-10-24
 
-- The GitHub Pages website and README now feature the four **original Windows Studio screenshots** in [`assets/screenshot`](assets/screenshot) rather than an illustrative UI.
-- Added public governance and maintenance material: security policy, contribution guide, Dependabot grouping, site validation, accessibility and discoverability metadata.
-- Updated the matched Avalonia Desktop, Fluent, and Inter package references from `12.1.3` to `12.1.4` in [PR #16](https://github.com/masarray/arfast-sntp/pull/16). This **does not** modify or replace the published v0.10.3 installer. New GUI/runtime builds require normal Windows and visual acceptance before another release.
+- Made the public website, documentation, and user-facing diagnostics vendor-neutral and easier to read.
+- Added regression coverage to keep third-party product names out of engineering copy.
+- Integrated the previous repository improvements: engineer-first onboarding, Windows command-line installer helper, updated desktop dependencies and separate Linux beta foundation.
+- Windows SNTP protocol, source election and clock-correction algorithms are unchanged.
+- Windows CI builds and packages the installer from the exact released source commit; the existing v0.10.3 assets remain unchanged.
+- See [release notes](docs/RELEASE-NOTES-0.10.4.md) and [ongoing engineering roadmap](docs/ENGINEERING-ROADMAP.md).
 
 ## [v0.10.3](https://github.com/masarray/arfast-sntp/releases/tag/v0.10.3) — 2026-10-11
 
@@ -30,4 +33,4 @@ All notable **public Windows releases** are listed here. The single Inno Setup i
 
 ## Scope and verification
 
-AR Fast SNTP is an IPv4 unicast SNTP client, **not** a complete RFC 5905 reference clock implementation or a certified industrial timing system. Builds are compiled on Windows CI without stepping the CI host clock. See [project status](docs/PROJECT-STATUS.md), [lab acceptance](docs/LAB-ACCEPTANCE.md), and [open industrial certification work](https://github.com/masarray/arfast-sntp/issues/2).
+AR Fast SNTP is an IPv4 unicast SNTP client, **not** a complete RFC 5905 reference clock implementation or a certified industrial timing system. Builds are compiled on Windows CI without stepping the CI host clock. See [project status](docs/PROJECT-STATUS.md), [lab acceptance](docs/LAB-ACCEPTANCE.md), and [ongoing engineering roadmap](docs/ENGINEERING-ROADMAP.md).
